@@ -69,3 +69,17 @@ class OptimizeTextRequest(BaseModel):
     text: str = Field(min_length=1)
     threshold: float = Field(default=0.82, ge=0.5, le=1.0)
     min_length: int = Field(default=3, ge=1, le=200)
+    mode: str = "auto"
+    guard: str = "facts"
+    order: str = "original"
+    include_map: bool = False
+    format: str = Field(default="text", pattern="^(text|annotated)$")
+
+
+class PlaygroundRequest(BaseModel):
+    text: str = Field(min_length=1)
+    threshold: float = Field(default=0.82, ge=0.5, le=1.0)
+    min_length: int = Field(default=3, ge=1, le=200)
+    mode: str = "auto"
+    guard: str = "facts"
+    order: str = "original"

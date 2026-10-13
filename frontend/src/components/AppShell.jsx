@@ -7,6 +7,7 @@ import {
   SignOut,
   Lightning,
   ListBullets,
+  Flask,
 } from "@phosphor-icons/react";
 
 const NavItem = ({ to, icon: Icon, label, active, testid }) => (
@@ -61,6 +62,7 @@ export default function AppShell({ children }) {
         <aside className="w-60 border-r-2 border-[#0A0A0A] bg-white p-4 hidden md:flex flex-col gap-2">
           <NavItem to="/app" icon={Stack} label="Optimizer" active={isActive("/app")} testid="nav-optimizer" />
           <NavItem to="/app/keys" icon={Key} label="API Keys" active={isActive("/app/keys")} testid="nav-keys" />
+          <NavItem to="/how-it-works" icon={Flask} label="How it works" active={false} testid="nav-how-it-works" />
           {user?.role === "admin" && (
             <NavItem to="/admin" icon={ShieldCheck} label="Admin" active={isActive("/admin")} testid="nav-admin" />
           )}

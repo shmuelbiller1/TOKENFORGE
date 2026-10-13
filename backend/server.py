@@ -4,31 +4,22 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-import asyncio
 import logging
 import os
 from datetime import datetime, timezone
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.middleware.cors import CORSMiddleware
 
 import auth as A
-from models import (
-    CreateKeyRequest,
-    LoginRequest,
-    OptimizeTextRequest,
-    RegisterRequest,
-)
-from optimizer import optimize
-from parsers import parse_bytes, split_text
+from optimizer import ENGINE_VERSION
+from engine_routes import build_router, reap_stale_jobs
+from models import CreateKeyRequest, LoginRequest, RegisterRequest
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("tokenforge")
-
-MAX_BYTES = 50 * 1024 * 1024  # 50 MB
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -170,150 +161,6 @@ async def revoke_key(key_id: str, user: dict = Depends(A.get_current_user)):
     return {"ok": True}
 
 
-# ============================ JOBS ============================
-async def _run_job(job_id: str, data: bytes, filename: str, threshold: float, min_length: int):
-    loop = asyncio.get_event_loop()
-    try:
-        fragments = await loop.run_in_executor(None, parse_bytes, data, filename, min_length)
-        if not fragments:
-            await db.jobs.update_one({"_id": ObjectId(job_id)},
-                {"$set": {"status": "failed", "error": "No readable text fragments found",
-                          "completed_at": datetime.now(timezone.utc).isoformat()}})
-            return
-        result = await loop.run_in_executor(None, optimize, fragments, threshold)
-        frags = result["fragments"]
-        # store fragments in batches
-        await db.fragments.delete_many({"job_id": job_id})
-        batch = []
-        for idx, f in enumerate(frags):
-            batch.append({"job_id": job_id, "order": idx, **f})
-            if len(batch) >= 1000:
-                await db.fragments.insert_many(batch)
-                batch = []
-        if batch:
-            await db.fragments.insert_many(batch)
-        await db.jobs.update_one({"_id": ObjectId(job_id)},
-            {"$set": {"status": "completed", "stats": result["stats"],
-                      "completed_at": datetime.now(timezone.utc).isoformat()}})
-    except Exception as e:  # pragma: no cover
-        logger.exception("job failed")
-        await db.jobs.update_one({"_id": ObjectId(job_id)},
-            {"$set": {"status": "failed", "error": str(e),
-                      "completed_at": datetime.now(timezone.utc).isoformat()}})
-
-
-@api.post("/jobs")
-async def create_job(
-    file: UploadFile = File(...),
-    threshold: float = 0.82,
-    min_length: int = 3,
-    user: dict = Depends(A.get_current_user),
-):
-    data = await file.read()
-    if len(data) == 0:
-        raise HTTPException(status_code=400, detail="Empty file")
-    if len(data) > MAX_BYTES:
-        raise HTTPException(status_code=413, detail="File exceeds 50 MB limit")
-    threshold = max(0.5, min(1.0, threshold))
-    doc = {
-        "user_id": user["_id"],
-        "filename": file.filename,
-        "size_bytes": len(data),
-        "threshold": threshold,
-        "status": "processing",
-        "stats": None,
-        "error": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "completed_at": None,
-    }
-    res = await db.jobs.insert_one(doc)
-    job_id = str(res.inserted_id)
-    asyncio.create_task(_run_job(job_id, data, file.filename, threshold, min_length))
-    return {"id": job_id, "status": "processing", "filename": file.filename}
-
-
-def _job_out(j: dict) -> dict:
-    return {
-        "id": str(j["_id"]),
-        "filename": j["filename"],
-        "size_bytes": j.get("size_bytes", 0),
-        "threshold": j.get("threshold"),
-        "status": j["status"],
-        "stats": j.get("stats"),
-        "error": j.get("error"),
-        "created_at": j["created_at"],
-        "completed_at": j.get("completed_at"),
-    }
-
-
-@api.get("/jobs")
-async def list_jobs(user: dict = Depends(A.get_current_user)):
-    jobs = await db.jobs.find({"user_id": user["_id"]}).sort("created_at", -1).to_list(200)
-    return [_job_out(j) for j in jobs]
-
-
-@api.get("/jobs/{job_id}")
-async def get_job(job_id: str, user: dict = Depends(A.get_current_user)):
-    j = await db.jobs.find_one({"_id": ObjectId(job_id), "user_id": user["_id"]})
-    if not j:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return _job_out(j)
-
-
-@api.get("/jobs/{job_id}/fragments")
-async def job_fragments(job_id: str, page: int = 1, page_size: int = 50,
-                        search: str = "", user: dict = Depends(A.get_current_user)):
-    j = await db.jobs.find_one({"_id": ObjectId(job_id), "user_id": user["_id"]})
-    if not j:
-        raise HTTPException(status_code=404, detail="Job not found")
-    query = {"job_id": job_id}
-    if search:
-        query["text"] = {"$regex": search, "$options": "i"}
-    page = max(1, page)
-    page_size = max(1, min(200, page_size))
-    total = await db.fragments.count_documents(query)
-    cursor = db.fragments.find(query, {"_id": 0}).sort("order", 1) \
-        .skip((page - 1) * page_size).limit(page_size)
-    items = await cursor.to_list(page_size)
-    return {"total": total, "page": page, "page_size": page_size, "items": items}
-
-
-@api.get("/jobs/{job_id}/export")
-async def export_job(job_id: str, user: dict = Depends(A.get_current_user)):
-    j = await db.jobs.find_one({"_id": ObjectId(job_id), "user_id": user["_id"]})
-    if not j:
-        raise HTTPException(status_code=404, detail="Job not found")
-    frags = await db.fragments.find({"job_id": job_id}, {"_id": 0, "job_id": 0}) \
-        .sort("order", 1).to_list(length=None)
-    payload = {
-        "filename": j["filename"],
-        "stats": j.get("stats"),
-        "optimized_text": "\n".join(f["text"] for f in frags),
-        "fragments": frags,
-    }
-    return JSONResponse(content=payload, headers={
-        "Content-Disposition": f'attachment; filename="optimized_{job_id}.json"'})
-
-
-@api.delete("/jobs/{job_id}")
-async def delete_job(job_id: str, user: dict = Depends(A.get_current_user)):
-    res = await db.jobs.delete_one({"_id": ObjectId(job_id), "user_id": user["_id"]})
-    if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Job not found")
-    await db.fragments.delete_many({"job_id": job_id})
-    return {"ok": True}
-
-
-# ============================ PUBLIC API (API KEY) ============================
-@api.post("/v1/optimize")
-async def v1_optimize(body: OptimizeTextRequest, user: dict = Depends(A.get_user_by_api_key)):
-    fragments = split_text(body.text, body.min_length)
-    if not fragments:
-        raise HTTPException(status_code=400, detail="No text fragments to optimize")
-    result = optimize(fragments, body.threshold)
-    return result
-
-
 # ============================ ADMIN ============================
 @api.get("/admin/stats")
 async def admin_stats(admin: dict = Depends(A.get_current_admin)):
@@ -387,9 +234,10 @@ async def admin_delete_user(user_id: str, admin: dict = Depends(A.get_current_ad
 
 @api.get("/")
 async def root():
-    return {"service": "TokenForge", "status": "ok"}
+    return {"service": "TokenForge", "status": "ok", "engine": ENGINE_VERSION}
 
 
+api.include_router(build_router(db))
 app.include_router(api)
 
 app.add_middleware(
@@ -407,7 +255,8 @@ async def startup():
     await db.api_keys.create_index("key_hash", unique=True)
     await db.api_keys.create_index("user_id")
     await db.jobs.create_index("user_id")
-    await db.fragments.create_index("job_id")
+    await db.fragments.create_index([("job_id", 1), ("order", 1)])
+    await reap_stale_jobs(db)
     # seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")

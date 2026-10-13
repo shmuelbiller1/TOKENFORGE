@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { formatApiErrorDetail } from "@/lib/api";
+import { EngineOptions } from "@/components/EngineOptions";
 import { toast } from "sonner";
 import {
   UploadSimple,
@@ -31,7 +32,7 @@ function StatusBadge({ status }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
-  const [threshold, setThreshold] = useState(0.82);
+  const [opts, setOpts] = useState({ threshold: 0.82, mode: "auto", guard: "facts", order: "original" });
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef(null);
@@ -67,16 +68,23 @@ export default function Dashboard() {
 
   useEffect(() => () => pollRef.current && clearInterval(pollRef.current), []);
 
-  const upload = async (file) => {
-    if (!file) return;
+  const upload = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const total = files.reduce((a, f) => a + f.size, 0);
+    if (total > 50 * 1024 * 1024) {
+      toast.error("Total upload exceeds 50 MB");
+      return;
+    }
     setUploading(true);
     try {
       const form = new FormData();
-      form.append("file", file);
-      await api.post(`/jobs?threshold=${threshold}`, form, {
+      files.forEach((f) => form.append("files", f));
+      await api.post("/jobs", form, {
+        params: opts,
         headers: { "Content-Type": "multipart/form-data" },
       });
-      toast.success(`Optimizing ${file.name}…`);
+      toast.success(files.length > 1 ? `Optimizing ${files.length} files together…` : `Optimizing ${files[0].name}…`);
       await loadJobs();
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail) || e.message);
@@ -89,7 +97,7 @@ export default function Dashboard() {
   const onDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files?.[0]) upload(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files?.length) upload(e.dataTransfer.files);
   };
 
   const remove = async (id, e) => {
@@ -109,8 +117,8 @@ export default function Dashboard() {
         <div className="overline mb-1">Optimizer</div>
         <h1 className="font-head font-black text-4xl tracking-tighter">Ingest & dedup</h1>
         <p className="text-sm text-[#4B5563] mt-2 max-w-2xl">
-          Drop a TXT, CSV, JSON, PDF or DOCX file (up to 50 MB). Each piece of data is kept exactly
-          once — duplicates and near-duplicates collapse with full audit trail.
+          Drop one or many files (50 MB total) — documents, spreadsheets, logs, code, archives. Files
+          in one upload are deduplicated against each other. Every original stays recoverable.
         </p>
       </div>
 
@@ -131,9 +139,9 @@ export default function Dashboard() {
         <input
           ref={fileRef}
           type="file"
-          accept=".txt,.csv,.tsv,.json,.pdf,.docx"
+          multiple
           className="hidden"
-          onChange={(e) => upload(e.target.files?.[0])}
+          onChange={(e) => upload(e.target.files)}
           data-testid="file-input"
         />
         <div className="flex flex-col items-center gap-3">
@@ -145,37 +153,16 @@ export default function Dashboard() {
             )}
           </div>
           <div className="font-head font-bold text-lg">
-            {uploading ? "Uploading…" : "Drop file or click to upload"}
+            {uploading ? "Uploading…" : "Drop files or click to upload"}
           </div>
-          <div className="overline">TXT · CSV · JSON · PDF · DOCX · max 50MB</div>
+          <div className="overline max-w-2xl leading-relaxed" data-testid="supported-formats">
+            TXT · MD · CSV · TSV · JSON · JSONL · YAML · XML · HTML · PDF · DOCX · XLSX · PPTX · RTF · EML · LOG · 40+ code types · ZIP · unknown → auto-detected
+          </div>
         </div>
       </div>
 
-      {/* Threshold control */}
-      <div className="card-brutal p-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <div className="overline mb-1">Near-duplicate similarity threshold</div>
-            <p className="text-sm text-[#4B5563]">
-              Higher = stricter (only very similar fragments merge). Lower = more aggressive dedup.
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <input
-              type="range"
-              min={0.5}
-              max={1}
-              step={0.01}
-              value={threshold}
-              onChange={(e) => setThreshold(parseFloat(e.target.value))}
-              className="w-48 accent-[#002FA7]"
-              data-testid="threshold-slider"
-            />
-            <span className="font-head font-black text-2xl tabular-nums w-16 text-right" data-testid="threshold-value">
-              {threshold.toFixed(2)}
-            </span>
-          </div>
-        </div>
+      <div className="card-brutal p-6" data-testid="engine-options">
+        <EngineOptions opts={opts} setOpts={setOpts} />
       </div>
 
       {/* Jobs table */}
@@ -208,9 +195,16 @@ export default function Dashboard() {
                     }`}
                     data-testid={`job-row-${j.id}`}
                   >
-                    <td className="px-4 py-3 font-bold flex items-center gap-2">
-                      <FileText size={18} weight="bold" className="text-[#002FA7]" />
-                      <span className="truncate max-w-[200px]">{j.filename}</span>
+                    <td className="px-4 py-3 font-bold">
+                      <div className="flex items-center gap-2">
+                        <FileText size={18} weight="bold" className="text-[#002FA7] shrink-0" />
+                        <span className="truncate max-w-[240px]" title={(j.files || []).join(", ")}>{j.filename}</span>
+                      </div>
+                      {j.stats?.lossless_verified && (
+                        <div className="text-[10px] uppercase tracking-wider text-[#34C759] mt-1" data-testid={`job-lossless-${j.id}`}>
+                          Lossless verified
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={j.status} />

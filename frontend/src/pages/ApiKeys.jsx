@@ -145,12 +145,34 @@ export default function ApiKeys() {
         <div className="overline mb-3 flex items-center gap-2">
           <Terminal size={16} weight="bold" /> Quick start
         </div>
-        <pre className="bg-[#0A0A0A] text-white p-4 rounded-sm text-xs overflow-x-auto leading-relaxed">
-{`curl -X POST "${API}/v1/optimize" \\
+        <div className="space-y-4" data-testid="api-docs">
+          {[
+            ["Optimize text (JSON)", `curl -X POST "${API}/v1/optimize" \\
   -H "X-API-Key: tio_your_key_here" \\
   -H "Content-Type: application/json" \\
-  -d '{"text": "your raw text...", "threshold": 0.82}'`}
-        </pre>
+  -d '{"text": "your raw text...", "threshold": 0.82, "mode": "auto",
+       "guard": "facts", "order": "original", "format": "text", "include_map": false}'`],
+            ["Optimize files (multipart, any format, ZIP ok, 50 MB total)", `curl -X POST "${API}/v1/optimize/file?mode=auto&format=annotated" \\
+  -H "X-API-Key: tio_your_key_here" \\
+  -F files=@logs.zip -F files=@customers.csv`],
+            ["Python", `import requests
+r = requests.post("${API}/v1/optimize",
+    headers={"X-API-Key": "tio_your_key_here"},
+    json={"text": open("data.txt").read()})
+print(r.json()["optimized_text"])     # send this to your LLM
+print(r.json()["stats"]["tokens_saved"])`],
+          ].map(([title, code]) => (
+            <div key={title}>
+              <div className="text-xs font-bold uppercase tracking-wider mb-1">{title}</div>
+              <pre className="bg-[#0A0A0A] text-white p-4 rounded-sm text-xs overflow-x-auto leading-relaxed">{code}</pre>
+            </div>
+          ))}
+          <p className="text-xs text-[#4B5563] leading-relaxed">
+            Response: <code>stats</code> (tokens before/after, timings, lossless_verified),{" "}
+            <code>optimized_text</code> (LLM-ready), <code>records</code>, and with{" "}
+            <code>include_map=true</code> the per-record <code>originals</code> + <code>map</code> to rebuild every input fragment.
+          </p>
+        </div>
       </div>
     </div>
   );

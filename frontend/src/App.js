@@ -10,6 +10,7 @@ import Dashboard from "@/pages/Dashboard";
 import JobResult from "@/pages/JobResult";
 import ApiKeys from "@/pages/ApiKeys";
 import Admin from "@/pages/Admin";
+import HowItWorks from "@/pages/HowItWorks";
 
 function Loading() {
   return (
@@ -48,6 +49,7 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/app" element={<Protected><Dashboard /></Protected>} />
           <Route path="/app/keys" element={<Protected><ApiKeys /></Protected>} />
           <Route path="/app/jobs/:jobId" element={<Protected><JobResult /></Protected>} />

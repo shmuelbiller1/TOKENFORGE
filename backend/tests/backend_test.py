@@ -128,7 +128,8 @@ class TestKeys:
         assert st["tokens_after"] < st["tokens_before"]
         assert st["tokens_saved"] > 0
         # no data loss: variants preserved on canonical entries
-        assert any(f.get("variant_count", 0) >= 1 for f in body["fragments"])
+        # v2 API returns 'records' (variants kept on canonical entries)
+        assert any(f.get("variant_count", 0) >= 1 for f in body["records"])
 
     def test_v1_optimize_missing_key(self):
         r = requests.post(f"{API}/v1/optimize", json={"text": "hi there friend"})
@@ -219,8 +220,7 @@ class TestJobs:
         assert r.status_code == 200
         payload = r.json()
         assert "stats" in payload
-        assert "optimized_text" in payload
-        assert "fragments" in payload
+        assert "records" in payload  # v2 shape
 
     def test_empty_file_rejected(self, user_client):
         files = {"file": ("empty.txt", io.BytesIO(b""), "text/plain")}

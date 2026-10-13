@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 2 covered the v2 engine: public /formats + /playground, multi-file jobs (incl. ZIP expansion), fragments w/ regex-safe search + kind filter, all 7 export formats, reconstruct w/ lossless headers, DELETE cleanup, /v1/optimize + /v1/optimize/file public API, plus full UI pass on HowItWorks + Landing + Dashboard + JobResult + ApiKeys. 71/71 backend pytest tests pass (33 engine unit + 38 engine API + 20 iteration_1 regression after updating 2 stale assertions to the v2 contract). All frontend data-testids present and interactive.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Public pages (/, /how-it-works, /login, /register)",
+       "issues": ["Noisy 401 from GET /api/auth/me on every public page load (axios interceptor fires the bootstrap check even on anonymous routes). Harmless but shows twice in the browser console."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_engine_api.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_engine.py",
+    "/app/test_reports/pytest/engine_api_results.xml",
+    "/app/test_reports/pytest/regression_results.xml",
+    "/app/test_reports/pytest/all_results.xml"
+  ],
+  "action_items": [
+    "Optional: silence /api/auth/me 401 noise on anonymous bootstrap (same note as iteration_1).",
+    "Optional: engine_routes.py is ~365 lines doing meta/jobs/exports/v1/playground — consider splitting if it grows further.",
+    "Optional: Dashboard auto-starts the job as soon as files are picked (no explicit submit); works, but a confirm/review step would be user-friendly for multi-file jobs."
+  ],
+  "critical_code_review_comments": [
+    "engine_routes.py _parse_all catches all exceptions per file and surfaces them in stats.parse_errors — good. If every file fails, the job correctly transitions to status=failed with a joined message.",
+    "fragments search uses re.escape() so regex meta chars like '(' are safe — explicitly covered by test_fragment_search_regex_safe.",
+    "DELETE /api/jobs/{id} removes jobs, fragments, and GridFS reconstruction bundle (verified by test_delete_removes_fragments_and_bundle).",
+    "Invalid ObjectId path params use _oid() helper to return 404 (not 500) — verified for DELETE.",
+    "Playground is capped at 256KB (returns 413) and validates mode/guard/order (returns 400) — all verified.",
+    "ZIP members are expanded and show up in stats.sources with names like 'bundle.zip/<member>' — verified against /app/samples/bundle.zip."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_engine_api.py (new, 38 tests covering all v2 features)",
+    "/app/backend/tests/backend_test.py (updated 2 stale assertions: v1 'fragments'->'records', export json no longer has 'optimized_text')"
+  ],
+  "success_rate": {"backend": "100% (71/71 pytest)", "frontend": "100% (all data-testids present and interactive)"},
+  "test_credentials": "admin@tokenforge.io / Admin@12345 (seeded); test users via /api/auth/register.",
+  "seed_data_creation": "Each pytest run creates a fresh user (engine_<rand>@test.com) plus throwaway UI testers (ui_<rand>@test.com). Not cleaned up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=<url> pytest /app/backend/tests/ -v. Three suites now: test_engine.py (pure engine unit tests), test_engine_api.py (v2 HTTP contract: /formats, /playground, /jobs multi-file + all samples incl. ZIP, fragments w/ regex-safe search + kind filter, 7 export formats, reconstruct headers, DELETE cleanup, /v1/optimize + /v1/optimize/file), backend_test.py (auth + keys + admin regression). Dashboard route is /app (not /dashboard); ApiKeys is /app/keys; JobResult is /app/jobs/:id. Dashboard uploads start automatically when files are selected — no explicit submit button."
+}

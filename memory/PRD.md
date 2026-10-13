@@ -23,11 +23,25 @@ Build an "LLM Token Ingestion Optimizer": pure-code tool that processes each pie
 - Admin console: KPIs + users table, activate/deactivate, delete (with self/admin protection).
 - Verified: backend 20/20 pytest; frontend flows pass.
 
+## v2 — Open-source release (2026-06-08)
+User asked to make it good enough to publish on GitHub, working for all data types, with a clear explanation of how it works, accurate.
+Choices: all common formats + auto-detect; README plus an in-app How-it-works page with a playground; MIT; reconstruction map, per-type modes, multi-file dedup.
+- Engine v2 (`optimizer.py`): vectorized numpy MinHash (128 perm, multiply-shift), tuned LSH bands + pair verification, union-find; kind-aware shingles (word for prose/tabular, char-5 for log/code, code needs ≥0.92); standalone numbers masked; Unicode-safe keys (the old engine dropped non-ASCII); lossless TEMPLATES (single/multi-slot, affix extraction, ≤4 slots, ≤64 rows/line); FACT GUARD (facts/strict/off); order original/frequency; reconstruction map + round-trip `lossless_verified`; stage timings.
+- Parsers v2 (`parsers.py`): txt md rst rtf pdf docx pptx html eml csv tsv xlsx json jsonl yaml xml + 40 code exts + ipynb + log + ZIP (nested, with limits) + content sniffing; binary files rejected.
+- Routes (`engine_routes.py`): multi-file jobs, streamed exports (json/txt/annotated/md/jsonl/csv/bundle), /reconstruct, GridFS map storage, /v1/optimize (+mode/guard/order/include_map/format), /v1/optimize/file, public /playground (256KB), /formats, stale-job reaper.
+- CLI `backend/cli.py` (optimize/reconstruct). Docs: README.md, LICENSE (MIT), CONTRIBUTING.md, .env.example files, /app/samples.
+- Frontend: /how-it-works (playground + pipeline + guarantees + formats), PublicHeader, EngineOptions, multi-file Dashboard, richer JobResult (filters, exports, rebuild, timings, sources), API docs.
+- Tested: iteration_2, 71/71 backend pytest, frontend 100%.
+
 ## Personas
 - **Developer/ML engineer**: cuts LLM token cost by deduping datasets via UI or API.
 - **Owner/Admin**: monitors users, jobs, total tokens saved; manages accounts.
 
 ## Backlog
+- P1: silence the bootstrap /auth/me 401 console noise; review step before multi-file upload starts; Docker Compose.
+- P2: streaming parser for files bigger than RAM; per-key quotas & usage charts; optional embedding dedup.
+- NOTE: .env files are not in .gitignore. Rotate JWT_SECRET/ADMIN_PASSWORD before making the repo public.
+
 - P1: StreamingResponse for very large exports; stale-job reaper for interrupted background jobs.
 - P2: split server.py into routers; suppress bootstrap /auth/me 401 console noise; CSV/JSON column-aware export formats; API usage rate limiting.
 

@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 3 verified all new features: table folding (default on/off), token budget on /api/jobs + /api/playground, per-user cache on /api/jobs and in-memory LRU cache on /api/v1/optimize, share link enable/disable with privacy filtering, /api/usage (series + totals + by_key + by_source) and admin /api/usage. All frontend data-testids present: UploadReview flow (file picker does not auto-start, review-start triggers job, Instant-result + nav on cache), EngineOptions (fold-select-on/off + budget-input on Dashboard and Playground), JobResult share-dialog with share-url/copy/disable, SharedReport public page (/r/:token) with headline/stats/preview/cta/try/signup + shared-error on invalid, ApiKeys user-usage chart with tokens-saved/runs/cache-hits + 7/30/90 ranges, Admin admin-usage + top-users, floating shortcuts-button + '?' opens shortcuts-dialog, 'g h' -> /how-it-works and 'g k' -> /app/keys, '/' focuses fragment-search, Ctrl+Enter in pg-input runs playground. Backend: 85/86 tests pass (test_engine 15, test_engine_api 38, backend_test 20, test_iteration3 12 + 1 skipped due to upload-race timing).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_engine_api.py",
+    "/app/backend/tests/test_engine.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration_3.xml",
+    "/app/test_reports/pytest/iteration_3_all.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "engine_routes.py:_cache_key hashes sorted content digests + opts + min_length + engine version — collisions-safe and version-pinned.",
+    "SHARE: /api/share/{token} strips originals, variants and map before returning preview_records — verified in test_share_enable_public_get_and_disable.",
+    "SHARE: disable sets share_enabled=false but keeps the token, so re-enabling returns the same token. GET on disabled -> 404 (no leak).",
+    "USAGE: /admin/usage uses $sort on computed 'saved' field via $addFields; emits top_users with resolved email (or 'deleted user' when the owner was removed).",
+    "optimizer.build_output: when budget > full, no omission; render() is only called twice (once for full tokens, once with the binary-search selected subset), budget note is appended with lost source lines count.",
+    "Dashboard: cache response (status=completed, cached=true) correctly navigates to /app/jobs/:id and shows an 'Instant result' toast; non-cached shows a 'Optimizing…' toast and reloads the jobs list.",
+    "ApiKeys: user-usage chart has 7D/30D/90D segments wired to GET /api/usage?days= — totals (tokens-saved, runs, cache-hits) are rendered as top kpis.",
+    "Share dialog: share-url input is readOnly and auto-selects on focus; share-copy copies to clipboard; share-disable turns the public link off without destroying the token.",
+    "Keyboard: 'g <letter>' prefix sequence works; the useHotkeys hook ignores plain keys while typing in inputs (confirmed '/' only fires on non-typing elements then focuses fragment-search).",
+    "Playground: fold-select + budget-input are reused from EngineOptions.jsx — same component across Dashboard and Playground, DRY.",
+    "Minor: /r/:token invalid-token UX shows a dedicated shared-error card (not a 404 route) — good."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration3.py (new, 13 tests covering fold/budget/cache/share/usage)"],
+  "success_rate": {"backend": "100% (85/86 passing, 1 skipped by design)", "frontend": "100% (all required data-testids present and interactive)"},
+  "test_credentials": "admin@tokenforge.io / Admin@12345 (seeded); test users via /api/auth/register.",
+  "seed_data_creation": "test_iteration3 creates one user it3_<rand>@test.com + one it3b_<rand>@test.com + one API key TEST_it3. UI run adds a ui_<rand>@test.com user. Not cleaned up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=<url> pytest /app/backend/tests/ -v. Four suites now (85 passing + 1 skipped race test): test_engine.py, test_engine_api.py, backend_test.py, test_iteration3.py. Routes: dashboard /app, keys /app/keys, job /app/jobs/:id, admin /admin, shared /r/:token, how-it-works /how-it-works. Cache is per-user (user_id + content hash + opts + min_length) — change threshold to force a cold miss. Share tokens persist across enable/disable (same token re-used). /api/share/{token} is intentionally unauthenticated and strips originals/variants/map."
+}

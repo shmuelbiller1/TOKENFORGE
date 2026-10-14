@@ -63,6 +63,22 @@ jobs:
           & $compiler "packaging\windows\TokenForge.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item "desktop\dist\installers\TokenForge-Setup-Windows-x64.exe" -Destination "TokenForge-Setup-Windows-x64.exe"
+      - name: Build single-file Windows portable EXE
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python desktop/build.py --portable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "desktop/dist/TokenForge-Portable.exe")) {
+            throw "Missing one-file portable executable"
+          }
+      - name: Verify USB-ready single-file program
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & "desktop/dist/TokenForge-Portable.exe" --self-test
+          if ($LASTEXITCODE -ne 0) { throw "Single-file offline self-test failed" }
+          Copy-Item "desktop/dist/TokenForge-Portable.exe" "TokenForge-Portable-Windows-x64.exe"
       - name: Zip actual macOS application
         if: runner.os == 'macOS'
         shell: bash
@@ -85,6 +101,7 @@ jobs:
             TokenForge-*.zip
             TokenForge-*.tar.gz
             TokenForge-Setup-*.exe
+            TokenForge-Portable-Windows-x64.exe
           if-no-files-found: error
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -103,3 +120,4 @@ jobs:
             TokenForge-*.zip
             TokenForge-*.tar.gz
             TokenForge-Setup-*.exe
+            TokenForge-Portable-Windows-x64.exe

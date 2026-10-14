@@ -26,6 +26,8 @@ Every timestamp, user ID and IP is still in the output, and on real logs and exp
 
 ---
 
+**Offline desktop:** see [download/build instructions](docs/OFFLINE_DESKTOP.md). The desktop app requires no account, database, or cloud connection. Security review: [public release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md).
+
 ## Table of contents
 - [Why](#why)
 - [Features](#features)
@@ -113,7 +115,7 @@ Order of savings on typical data: **table folding > templates > exact dedup > ne
 - **Values stay visible.** Templates write every distinct value into the optimized text. Under the default guard, no number, ID or name disappears from the LLM-facing text.
 - **Deterministic.** The same input and settings always give the same output.
 
-**What “lossless” covers, exactly:** the stream of fragments *after parsing*. Parsing trims leading and trailing whitespace, list bullets and markup (HTML tags, Markdown emphasis). It extracts the text of PDF/Office files (not images or styling) and skips fragments shorter than `min_length` (default 3). With `guard=off`, near-duplicate variants appear only in the map, not in the optimized text.
+**What “lossless” covers, exactly:** the stream of fragments *after parsing*, not the original file bytes. Parsing trims leading and trailing whitespace, list bullets and markup (HTML tags, Markdown emphasis). It extracts the text of PDF/Office files (not images or styling) and skips fragments shorter than `min_length` (default 3). With `guard=off`, near-duplicate variants appear only in the map, not in the optimized text.
 
 ## Supported formats
 | Family | Formats |
@@ -131,8 +133,8 @@ Encodings: UTF-8 (with or without BOM), UTF-16, and a CP-1252 fallback.
 
 ### Docker (one command)
 ```bash
-git clone https://github.com/<you>/tokenforge.git && cd tokenforge
-cp .env.docker.example .env        # optional, but set your own secrets
+git clone https://github.com/shmuelbiller1/TOKENFORGE.git && cd TOKENFORGE
+cp .env.docker.example .env        # REQUIRED: replace secrets with unique values
 docker compose up -d --build       # → http://localhost:8080
 ```
 Log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. nginx serves the UI and proxies `/api` to the backend, and MongoDB data lives in the `mongo-data` volume. Cookies are `Secure`, which browsers allow on `http://localhost`. On any other host, put HTTPS in front (Caddy, Traefik or a cloud load balancer).
@@ -141,7 +143,7 @@ Log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. nginx serves the UI and proxies `/
 Requirements: Python 3.11+, Node 18+ with Yarn, MongoDB 6+.
 
 ```bash
-git clone https://github.com/<you>/tokenforge.git && cd tokenforge
+git clone https://github.com/shmuelbiller1/TOKENFORGE.git && cd TOKENFORGE
 
 # backend
 cd backend

@@ -77,6 +77,18 @@ agenthub/agents/youtube/db
 .cache/
 
 memory/test_credentials.md
+# Track example environment files, but never real credentials
+!.env.docker.example
+!backend/.env.example
+!frontend/.env.example
+# Local build artifacts
+desktop/build/
+desktop/dist/
+desktop/tiktoken_cache/
+*.spec
+*.exe
+*.app/
+*.AppImage
 
 # Mobile development
 android-sdk/frontend/node_modules/.cache/default-development/4.pack

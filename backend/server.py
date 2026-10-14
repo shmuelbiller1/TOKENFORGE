@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.middleware.cors import CORSMiddleware
 
@@ -108,7 +109,7 @@ async def refresh_token(request: Request, response: Response):
         raise HTTPException(status_code=401, detail="User not found")
     access = A.create_access_token(str(user["_id"]), user["email"])
     response.set_cookie("access_token", access, httponly=True, secure=True,
-                        samesite="none", max_age=3600, path="/")
+                        samesite="lax", max_age=3600, path="/")
     return {"ok": True}
 
 
@@ -240,6 +241,19 @@ async def root():
 api.include_router(build_router(db))
 app.include_router(api)
 
+@app.middleware("http")
+async def check_session_origin(request: Request, call_next):
+    """Additional browser-origin restriction for cookie-authenticated mutations."""
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and (
+        request.cookies.get("access_token") or request.cookies.get("refresh_token")
+    ):
+        origin = request.headers.get("origin")
+        allowed = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+        if origin and origin.rstrip("/") != allowed:
+            return JSONResponse({"detail": "Untrusted request origin"}, status_code=403)
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.environ.get("FRONTEND_URL", "http://localhost:3000")],
@@ -261,23 +275,28 @@ async def startup():
     await db.jobs.create_index("share_token", sparse=True)
     await db.jobs.create_index([("user_id", 1), ("cache_key", 1)])
     await reap_stale_jobs(db)
-    # seed admin
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com").lower()
-    admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
-    existing = await db.users.find_one({"email": admin_email})
-    if existing is None:
-        await db.users.insert_one({
-            "email": admin_email,
-            "password_hash": A.hash_password(admin_password),
-            "name": "Owner",
-            "role": "admin",
-            "active": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        logger.info("Seeded admin %s", admin_email)
-    elif not A.verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email},
-            {"$set": {"password_hash": A.hash_password(admin_password), "role": "admin", "active": True}})
+    # Provision only on first run; never reset an existing admin on restart.
+    secret = os.environ.get("JWT_SECRET", "")
+    if len(secret) < 32 or secret == "change-me-please-use-a-long-random-string":
+        raise RuntimeError("JWT_SECRET must be a unique random secret of at least 32 characters")
+    admin_email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "")
+    if bool(admin_email) != bool(admin_password):
+        raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD must both be set or both omitted")
+    if admin_email:
+        if len(admin_password) < 16:
+            raise RuntimeError("ADMIN_PASSWORD must have at least 16 characters")
+        existing = await db.users.find_one({"email": admin_email})
+        if existing is None:
+            await db.users.insert_one({
+                "email": admin_email,
+                "password_hash": A.hash_password(admin_password),
+                "name": "Owner",
+                "role": "admin",
+                "active": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            logger.info("Provisioned initial administrator %s", admin_email)
 
 
 @app.on_event("shutdown")

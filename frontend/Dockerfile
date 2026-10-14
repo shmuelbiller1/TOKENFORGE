@@ -1,7 +1,7 @@
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile --network-timeout 600000
+COPY package.json ./
+RUN yarn install --non-interactive --network-timeout 600000
 COPY . .
 # empty = same origin; nginx proxies /api to the backend
 ARG REACT_APP_BACKEND_URL=""

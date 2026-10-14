@@ -1,0 +1,36 @@
+name: Checks
+on:
+  push:
+    branches: [main, "release/**"]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y python3-tk
+      - run: pip install -r backend/requirements-core.txt
+      - run: python -m compileall -q backend desktop
+      - run: python -m pytest backend/tests/test_engine.py backend/tests/test_release_safety.py desktop/test_desktop.py -q
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install --global yarn@1.22.22
+      - run: yarn install --non-interactive
+        working-directory: frontend
+      - run: yarn build
+        working-directory: frontend
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t tokenforge-backend backend
+      - run: docker build -t tokenforge-frontend frontend

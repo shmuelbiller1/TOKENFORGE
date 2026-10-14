@@ -1,5 +1,4 @@
-# One command:  docker compose up -d --build   →   open http://localhost:8080
-# Override secrets in a root .env file (see .env.docker.example) before exposing it to a network.
+# Copy .env.docker.example to .env; replace placeholder secrets first.
 services:
   mongo:
     image: mongo:7
@@ -11,7 +10,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-
   backend:
     build: ./backend
     restart: unless-stopped
@@ -22,18 +20,13 @@ services:
       MONGO_URL: mongodb://mongo:27017
       DB_NAME: tokenforge
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
-      CORS_ORIGINS: ${FRONTEND_URL:-http://localhost:8080}
-      JWT_SECRET: ${JWT_SECRET:-change-me-please-use-a-long-random-string}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tokenforge.local}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe!12345}
-
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
   frontend:
     build: ./frontend
     restart: unless-stopped
-    depends_on:
-      - backend
-    ports:
-      - "${PORT:-8080}:80"
-
+    depends_on: [backend]
+    ports: ["${PORT:-8080}:80"]
 volumes:
   mongo-data:

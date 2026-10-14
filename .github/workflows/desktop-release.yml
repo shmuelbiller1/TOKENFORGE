@@ -41,10 +41,27 @@ jobs:
             macOS) desktop/dist/TokenForge.app/Contents/MacOS/TokenForge --self-test ;;
             Linux) desktop/dist/TokenForge/TokenForge --self-test ;;
           esac
+      - name: Check macOS Finder file registration
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python -c 'import plistlib; from pathlib import Path; p=Path("desktop/dist/TokenForge.app/Contents/Info.plist"); assert plistlib.load(p.open("rb"))["CFBundleDocumentTypes"]'
       - name: Zip Windows application folder
         if: runner.os == 'Windows'
         shell: pwsh
         run: Compress-Archive -Path desktop/dist/TokenForge -DestinationPath TokenForge-Windows-x64.zip
+      - name: Build an installed Windows app with Start Menu and Open With integration
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $compiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          if (-not (Test-Path $compiler)) { throw "Inno Setup 6 was not installed" }
+          & $compiler "packaging\windows\TokenForge.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Zip actual macOS application
         if: runner.os == 'macOS'
         shell: bash
@@ -62,6 +79,7 @@ jobs:
           path: |
             TokenForge-*.zip
             TokenForge-*.tar.gz
+            desktop/dist/installers/*.exe
           if-no-files-found: error
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -79,3 +97,4 @@ jobs:
           files: |
             TokenForge-*.zip
             TokenForge-*.tar.gz
+            TokenForge-Setup-*.exe

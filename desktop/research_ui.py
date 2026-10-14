@@ -20,6 +20,8 @@ class ResearchWindow:
         self.items: list[tuple[str, str]] = []
         self.report: dict | None = None
         self.events: queue.Queue = queue.Queue()
+        self.busy = False
+        self.edit_controls: list[ttk.Button] = []
 
         outer = ttk.Frame(self.window, padding=12)
         outer.pack(fill="both", expand=True)
@@ -35,7 +37,8 @@ class ResearchWindow:
         project_row.pack(fill="x")
         ttk.Label(project_row, text="Project:").pack(side="left")
         self.project = tk.StringVar(value="Research project")
-        ttk.Entry(project_row, textvariable=self.project).pack(side="left", padx=8, fill="x", expand=True)
+        self.project_entry = ttk.Entry(project_row, textvariable=self.project)
+        self.project_entry.pack(side="left", padx=8, fill="x", expand=True)
 
         ttk.Label(outer, text="Revisions (oldest first; select one to move or annotate):").pack(anchor="w", pady=(8, 2))
         file_row = ttk.Frame(outer)
@@ -54,7 +57,9 @@ class ResearchWindow:
             ("Move down", lambda: self.move(1)),
             ("Explain change", self.edit_note),
         ):
-            ttk.Button(actions, text=name, command=callback).pack(fill="x", pady=2)
+            control = ttk.Button(actions, text=name, command=callback)
+            control.pack(fill="x", pady=2)
+            self.edit_controls.append(control)
 
         run_row = ttk.Frame(outer)
         run_row.pack(fill="x", pady=8)
@@ -97,6 +102,10 @@ class ResearchWindow:
         self.save_txt_btn.configure(state="disabled")
         self.save_json_btn.configure(state="disabled")
         self.status.set("Comparison needs to be run or rerun after any change.")
+        # Never show results for an outdated revision order or set of notes.
+        self.output.configure(state="normal")
+        self.output.delete("1.0", "end")
+        self.output.configure(state="disabled")
 
     def add_versions(self) -> None:
         files = filedialog.askopenfilenames(
@@ -143,6 +152,10 @@ class ResearchWindow:
                 "Select revisions", "Please add at least two versions.", parent=self.window)
         self.run_btn.configure(state="disabled")
         self._invalidate()
+        self.busy = True
+        for control in self.edit_controls:
+            control.configure(state="disabled")
+        self.project_entry.configure(state="disabled")
         self.status.set("Comparing local copies without altering the source documents...")
         paths = [p for p, _ in self.items]
         notes = [note for _, note in self.items]
@@ -164,6 +177,10 @@ class ResearchWindow:
             while True:
                 status, value = self.events.get_nowait()
                 self.run_btn.configure(state="normal")
+                self.busy = False
+                for control in self.edit_controls:
+                    control.configure(state="normal")
+                self.project_entry.configure(state="normal")
                 if status == "error":
                     self.status.set("Comparison failed.")
                     messagebox.showerror("R&D comparison", value, parent=self.window)

@@ -1,6 +1,8 @@
 ; TokenForge native Windows installer - keeps existing default file applications.
 #define AppName "TokenForge"
-#define AppVersion "0.3.1"
+#ifndef AppVersion
+#define AppVersion "0.3.8"
+#endif
 
 [Setup]
 AppId={{6CE03228-2A4A-45E3-B5E4-30C3C380B948}

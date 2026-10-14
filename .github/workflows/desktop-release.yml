@@ -1,10 +1,16 @@
 name: Desktop packages
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'packaging/**'
+      - 'backend/**'
+      - '.github/workflows/desktop-release.yml'
   push:
     tags: ["v*"]
 permissions:
-  contents: write
+  contents: read
 jobs:
   build:
     strategy:
@@ -27,13 +33,73 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y python3-tk
       - run: python -m pip install -r backend/requirements-desktop.txt "pyinstaller>=6.15,<7"
       - run: python desktop/build.py
-      - shell: pwsh
-        run: Compress-Archive -Path desktop/dist/TokenForge -DestinationPath TokenForge-${{ matrix.label }}.zip
+      - name: Smoke-test frozen executable before upload
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            Windows) desktop/dist/TokenForge/TokenForge.exe --self-test ;;
+            macOS) desktop/dist/TokenForge.app/Contents/MacOS/TokenForge --self-test ;;
+            Linux) desktop/dist/TokenForge/TokenForge --self-test ;;
+          esac
+      - name: Check macOS Finder file registration
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python -c 'import plistlib; from pathlib import Path; p=Path("desktop/dist/TokenForge.app/Contents/Info.plist"); assert plistlib.load(p.open("rb"))["CFBundleDocumentTypes"]'
+      - name: Zip Windows application folder
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path desktop/dist/TokenForge -DestinationPath TokenForge-Windows-x64.zip
+      - name: Build an installed Windows app with Start Menu and Open With integration
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $compiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          if (-not (Test-Path $compiler)) { throw "Inno Setup 6 was not installed" }
+          & $compiler "packaging\windows\TokenForge.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "desktop\dist\installers\TokenForge-Setup-Windows-x64.exe" -Destination "TokenForge-Setup-Windows-x64.exe"
+      - name: Zip actual macOS application
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          test -d desktop/dist/TokenForge.app
+          arch=$(uname -m)
+          ditto -c -k --sequesterRsrc --keepParent desktop/dist/TokenForge.app "TokenForge-macOS-${arch}.zip"
+      - name: Archive Linux executable with its permissions
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cp packaging/linux/tokenforge.desktop desktop/dist/TokenForge/
+          cp packaging/linux/install-user.sh desktop/dist/TokenForge/
+          sh -n desktop/dist/TokenForge/install-user.sh
+          tar -C desktop/dist -czf TokenForge-Linux-x64.tar.gz TokenForge
       - uses: actions/upload-artifact@v4
         with:
           name: TokenForge-${{ matrix.label }}
-          path: TokenForge-${{ matrix.label }}.zip
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+          path: |
+            TokenForge-*.zip
+            TokenForge-*.tar.gz
+            TokenForge-Setup-*.exe
+          if-no-files-found: error
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          files: TokenForge-${{ matrix.label }}.zip
+          pattern: TokenForge-*
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            TokenForge-*.zip
+            TokenForge-*.tar.gz
+            TokenForge-Setup-*.exe

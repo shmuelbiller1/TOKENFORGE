@@ -13,4 +13,24 @@ cmd=[sys.executable,"-m","PyInstaller","--noconfirm","--clean","--windowed",
      "--add-data",str(cache)+os.pathsep+"tiktoken_cache",
      "--distpath",str(root/"desktop"/"dist"),"--workpath",str(root/"desktop"/"build"),
      "--specpath",str(root/"desktop"/"build"),str(root/"desktop"/"app.py")]
-raise SystemExit(subprocess.call(cmd))
+if sys.platform=="darwin":
+    cmd[3:3]=["--osx-bundle-identifier","com.terranextech.tokenforge"]
+code=subprocess.call(cmd)
+if code==0 and sys.platform=="darwin":
+    import plistlib
+    info=root/"desktop"/"dist"/"TokenForge.app"/"Contents"/"Info.plist"
+    if not info.exists(): raise RuntimeError("macOS application bundle missing")
+    with info.open("rb") as fp: data=plistlib.load(fp)
+    data["CFBundleDocumentTypes"]=[
+        {"CFBundleTypeName":"Text and data for TokenForge",
+         "CFBundleTypeRole":"Viewer",
+         "LSHandlerRank":"Alternate",
+         "LSItemContentTypes":["public.plain-text","public.comma-separated-values-text",
+                               "public.json","public.zip-archive","com.adobe.pdf"]}
+    ]
+    with info.open("wb") as fp: plistlib.dump(data,fp)
+    # PyInstaller signs macOS bundles before we modify Info.plist. Re-sign the final
+    # modified bundle with an ad-hoc signature (not developer notarization).
+    subprocess.run(["codesign","--force","--deep","--sign","-",
+                    str(root/"desktop"/"dist"/"TokenForge.app")],check=True)
+raise SystemExit(code)

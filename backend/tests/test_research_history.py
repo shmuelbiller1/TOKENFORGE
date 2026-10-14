@@ -170,3 +170,33 @@ def test_same_version_multiple_occurrences_are_all_retained(tmp_path):
         {"revision": 1, "section": "document", "fragment": 1},
         {"revision": 1, "section": "document", "fragment": 2},
     ]
+
+
+def test_exact_sentence_inside_changed_paragraph_keeps_provenance(tmp_path):
+    first = tmp_path / "rev1.txt"
+    later = tmp_path / "rev2.txt"
+    first.write_text("The apparatus uses a ceramic sleeve. Current: 4 MA and hold 150 us.\n", encoding="utf-8")
+    later.write_text("The apparatus uses a ceramic sleeve. Current: 8 MA and hold 10 us.\n", encoding="utf-8")
+    report = compare_revisions([first, later])
+    sentences = report["exact_sentence_candidates"]["entries"]
+    same = next(x for x in sentences if x["text"] == "The apparatus uses a ceramic sleeve.")
+    assert len(same["occurrences"]) == 2
+    for entry in same["occurrences"]:
+        raw = [first, later][entry["revision"] - 1].read_text(encoding="utf-8").strip()
+        assert raw[entry["start_char"]:entry["end_char"]] == same["text"]
+        assert entry["fragment"] == 1
+    assert "Current: 4 MA and hold 150 us." not in [x["text"] for x in sentences]
+    assert "Current: 8 MA and hold 10 us." not in [x["text"] for x in sentences]
+    assert "EXACT REPEATED SENTENCE CANDIDATES" in render_history(report)
+
+
+def test_sentence_candidate_segmentation_never_equates_single_changed_unit(tmp_path):
+    left = tmp_path / "left.txt"
+    right = tmp_path / "right.txt"
+    left.write_text("Voltage was 10 kV. Validation is still pending.\n")
+    right.write_text("Voltage was 10 V. Validation is still pending.\n")
+    r = compare_revisions([left, right])
+    entries = {x["text"] for x in r["exact_sentence_candidates"]["entries"]}
+    assert "Validation is still pending." in entries
+    assert "Voltage was 10 kV." not in entries
+    assert "Voltage was 10 V." not in entries

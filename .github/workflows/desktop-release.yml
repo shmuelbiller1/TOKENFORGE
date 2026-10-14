@@ -77,12 +77,15 @@ jobs:
         shell: pwsh
         run: |
           $env:TOKENFORGE_SELFTEST_REPORT = "portable-self-test.txt"
-          & "desktop/dist/TokenForge-Portable.exe" --self-test
-          if ($LASTEXITCODE -ne 0) {
+          # Windows GUI programs can return control to PowerShell before they exit.
+          # Start-Process -Wait checks the completed app, not a stale LASTEXITCODE.
+          $portable = (Resolve-Path "desktop/dist/TokenForge-Portable.exe").Path
+          $process = Start-Process -FilePath $portable -ArgumentList "--self-test" -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
             if (Test-Path $env:TOKENFORGE_SELFTEST_REPORT) {
               Get-Content $env:TOKENFORGE_SELFTEST_REPORT
             }
-            throw "Single-file offline self-test failed"
+            throw "Single-file offline self-test failed with exit code $($process.ExitCode)"
           }
           Copy-Item "desktop/dist/TokenForge-Portable.exe" "TokenForge-Portable-Windows-x64.exe"
       - name: Zip actual macOS application

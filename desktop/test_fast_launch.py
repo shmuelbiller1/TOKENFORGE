@@ -23,3 +23,28 @@ def test_ci_matrix_expressions_are_not_escaped():
     workflow = (ROOT / ".github/workflows/desktop-release.yml").read_text(encoding="utf-8")
     assert "runs-on: ${{ matrix.os }}" in workflow
     assert chr(92) + "${{" not in workflow
+
+def test_os_open_files_are_added_once_and_automatically_started(tmp_path):
+    from desktop.app import Desktop
+    p=tmp_path/"file with spaces.txt"
+    p.write_text("hello there",encoding="utf-8")
+    class FileList:
+        def __init__(self): self.items=[]
+        def insert(self,_at,value): self.items.append(value)
+    class RunButton:
+        def cget(self,_key): return "normal"
+    class Status:
+        def set(self,_text): pass
+    class FakeDesktop:
+        def __init__(self):
+            self.files=[]
+            self.list=FileList()
+            self.run=RunButton()
+            self.status=Status()
+            self.started=0
+        def start(self): self.started+=1
+    d=FakeDesktop()
+    assert Desktop.open_paths(d,[str(p)],auto_start=True)==1
+    assert Desktop.open_paths(d,[str(p)],auto_start=True)==0
+    assert d.files==[str(p.resolve())]
+    assert d.started==1

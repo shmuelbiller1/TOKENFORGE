@@ -42,6 +42,7 @@ class Desktop:
         commands=ttk.Frame(box);commands.pack(fill="x")
         ttk.Button(commands,text="Add files",command=self.add).pack(side="left")
         ttk.Button(commands,text="Clear",command=self.clear).pack(side="left",padx=8)
+        ttk.Button(commands,text="R&D History",command=self.open_history).pack(side="left",padx=8)
         self.list=tk.Listbox(box,height=6);self.list.pack(fill="x",pady=8)
         options=ttk.Frame(box);options.pack(fill="x")
         ttk.Label(options,text="Similarity:").pack(side="left")
@@ -83,6 +84,11 @@ class Desktop:
         elif added:
             self.status.set(str(len(self.files))+" files ready")
         return added
+
+    def open_history(self):
+        # Keep ordinary optimization unchanged. Import lazily on request.
+        from research_ui import ResearchWindow
+        ResearchWindow(self.root)
 
     def open_mac_documents(self,*paths):
         self.open_paths(paths,auto_start=True)
@@ -145,6 +151,14 @@ def packaged_self_test():
         assert result["stats"]["lossless_verified"]
         assert result["output"]["text"]
         assert tiktoken.get_encoding("cl100k_base") is not None
+        # Ensure the new optional feature actually survives both PyInstaller
+        # packaging modes; not just the unfrozen Python unit tests.
+        from research_history import compare_revisions, render_history
+        second = Path(folder) / "second.txt"
+        second.write_text("Order 1 shipped\\nOrder 3 shipped", encoding="utf-8")
+        history = compare_revisions([file, second])
+        assert len(history["comparisons"]) == 1
+        assert "REVISION 1 -> 2" in render_history(history)
 
 
 if __name__=="__main__":

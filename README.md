@@ -28,7 +28,9 @@ Every timestamp, user ID and IP is still in the output, and on real logs and exp
 
 **To run TokenForge without programming:** Download the correct application archive from [GitHub Releases](https://github.com/shmuelbiller1/TOKENFORGE/releases), **not** the automatically generated Source code ZIP/tar.gz. See the [offline installation guide](docs/OFFLINE_DESKTOP.md).
 
-**Offline desktop:** see [download/build instructions](docs/OFFLINE_DESKTOP.md). The desktop app requires no account, database, or cloud connection. Security review: [public release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md).
+**Offline desktop:** see [download/build instructions](docs/OFFLINE_DESKTOP.md). The desktop app requires no account, database, or cloud connection.
+
+**For researchers:** The offline desktop app now includes an optional **R&D History** window. Supply ordered revision files to see traceable changes, an index of strictly identical extracted passages (with every source occurrence), SHA-256 file fingerprints, and TXT/JSON evidence exports. Scientific explanations are supplied by you, never invented by the tool. [Full guide and limits](docs/RESEARCH_HISTORY.md). Security review: [public release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md).
 
 ## Table of contents
 - [Why](#why)

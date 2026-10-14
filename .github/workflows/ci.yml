@@ -15,7 +15,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y python3-tk
       - run: pip install -r backend/requirements-core.txt
       - run: python -m compileall -q backend desktop
-      - run: python -m pytest backend/tests/test_engine.py backend/tests/test_release_safety.py desktop/test_desktop.py desktop/test_fast_launch.py -q
+      - run: python -m pytest backend/tests/test_engine.py backend/tests/test_release_safety.py backend/tests/test_research_history.py desktop/test_desktop.py desktop/test_fast_launch.py -q
   web:
     runs-on: ubuntu-latest
     steps:

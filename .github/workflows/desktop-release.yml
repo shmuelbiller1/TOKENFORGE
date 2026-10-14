@@ -62,6 +62,7 @@ jobs:
           if (-not (Test-Path $compiler)) { throw "Inno Setup 6 was not installed" }
           & $compiler "packaging\windows\TokenForge.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "desktop\dist\installers\TokenForge-Setup-Windows-x64.exe" -Destination "TokenForge-Setup-Windows-x64.exe"
       - name: Zip actual macOS application
         if: runner.os == 'macOS'
         shell: bash
@@ -83,7 +84,7 @@ jobs:
           path: |
             TokenForge-*.zip
             TokenForge-*.tar.gz
-            desktop/dist/installers/*.exe
+            TokenForge-Setup-*.exe
           if-no-files-found: error
   publish:
     if: startsWith(github.ref, 'refs/tags/v')

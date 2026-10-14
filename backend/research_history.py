@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import re
 from pathlib import Path
 from typing import Sequence
 
@@ -107,6 +108,62 @@ def _compare(
         })
     return changes, {"added_fragments": added, "removed_fragments": removed,
                      "changed_groups": len(changes)}
+
+
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?。！？])\\s+(?=\\S)")
+
+
+def _sentence_segments(fragment: str) -> list[tuple[str, int, int]]:
+    """Return exact extracted-text spans at *candidate* sentence boundaries.
+
+    Do not claim linguistic segmentation accuracy: abbreviations, formulas
+    and unusual punctuation can fool any punctuation-based segmenter.
+    A duplicate is indexed only when all extracted characters are identical.
+    """
+    result: list[tuple[str, int, int]] = []
+    start = 0
+    edges = [m.start() for m in _SENTENCE_BREAK.finditer(fragment)]
+    for end in edges + [len(fragment)]:
+        raw = fragment[start:end]
+        first = len(raw) - len(raw.lstrip())
+        last = len(raw.rstrip())
+        if last > first:
+            lo, hi = start + first, start + last
+            result.append((fragment[lo:hi], lo, hi))
+        start = end
+        while start < len(fragment) and fragment[start].isspace():
+            start += 1
+    return result
+
+
+def _exact_sentence_candidates(
+    rows_by_version: list[list[tuple[str, int, str]]],
+) -> dict:
+    groups: dict[str, list[dict]] = {}
+    for version, rows in enumerate(rows_by_version, 1):
+        for section, fragment_number, text in rows:
+            for sentence, lo, hi in _sentence_segments(text):
+                groups.setdefault(sentence, []).append({
+                    "revision": version,
+                    "section": section,
+                    "fragment": fragment_number,
+                    "start_char": lo,
+                    "end_char": hi,
+                })
+    entries = [
+        {"text": value, "occurrences": origins}
+        for value, origins in groups.items() if len(origins) > 1
+    ]
+    return {
+        "scope": (
+            "Only identical Unicode substrings of extracted text are grouped. "
+            "Punctuation-based sentence boundaries are candidates, not "
+            "verified linguistic sentences. Source fragment and character "
+            "offsets are retained. No scientific equivalence is inferred."
+        ),
+        "repeated_candidates": len(entries),
+        "entries": entries,
+    }
 
 
 def _exact_passage_index(
@@ -206,6 +263,7 @@ def compare_revisions(
         "versions": versions,
         "comparisons": comparisons,
         "exact_repetitions": _exact_passage_index(all_rows),
+        "exact_sentence_candidates": _exact_sentence_candidates(all_rows),
     }
 
 
@@ -238,6 +296,20 @@ def render_history(report: dict) -> str:
             for o in entry["occurrences"]
         )
         lines.append(f"  {entry['text']}  [appears at: {location}]")
+    sentences = report["exact_sentence_candidates"]
+    lines.extend([
+        "",
+        "EXACT REPEATED SENTENCE CANDIDATES (inside extracted paragraphs):",
+        sentences["scope"],
+        f"  {sentences['repeated_candidates']} repeated exact segments",
+    ])
+    for entry in sentences["entries"]:
+        positions = ", ".join(
+            f"v{o['revision']} {o['section']} fragment {o['fragment']} "
+            f"chars {o['start_char']}:{o['end_char']}"
+            for o in entry["occurrences"]
+        )
+        lines.append(f"  {entry['text']}  [occurs at: {positions}]")
     for comparison in report["comparisons"]:
         st = comparison["stats"]
         lines.extend([

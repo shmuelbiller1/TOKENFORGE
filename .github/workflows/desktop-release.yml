@@ -76,8 +76,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $env:TOKENFORGE_SELFTEST_REPORT = "portable-self-test.txt"
           & "desktop/dist/TokenForge-Portable.exe" --self-test
-          if ($LASTEXITCODE -ne 0) { throw "Single-file offline self-test failed" }
+          if ($LASTEXITCODE -ne 0) {
+            if (Test-Path $env:TOKENFORGE_SELFTEST_REPORT) {
+              Get-Content $env:TOKENFORGE_SELFTEST_REPORT
+            }
+            throw "Single-file offline self-test failed"
+          }
           Copy-Item "desktop/dist/TokenForge-Portable.exe" "TokenForge-Portable-Windows-x64.exe"
       - name: Zip actual macOS application
         if: runner.os == 'macOS'

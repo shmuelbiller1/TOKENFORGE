@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=TokenForge
+GenericName=Offline Document Optimizer
+Comment=Optimize local text, logs and documents for LLM context
+Exec=TokenForge %F
+Terminal=false
+Categories=Office;Utility;
+MimeType=text/plain;text/csv;application/json;application/zip;application/pdf;
+StartupNotify=true

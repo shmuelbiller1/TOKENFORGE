@@ -61,8 +61,10 @@ def _opts(threshold: float, mode: str, guard: str, order: str, fold_tables: bool
 
 def _cache_key(parts: List[bytes], opts: dict, min_length: int) -> str:
     h = hashlib.sha256(ENGINE_VERSION.encode())
-    for p in sorted(hashlib.sha256(x).digest() for x in parts):
-        h.update(p)
+    # Sequence matters: reversing files changes source indices and reconstruction map.
+    for p in parts:
+        h.update(len(p).to_bytes(8, "big"))
+        h.update(hashlib.sha256(p).digest())
     h.update(json.dumps(opts, sort_keys=True).encode() + str(min_length).encode())
     return h.hexdigest()
 
@@ -102,7 +104,7 @@ async def _form_files(request: Request) -> List[UploadFile]:
 async def _read_uploads(files: List[UploadFile]) -> List[tuple]:
     blobs, total = [], 0
     for f in files:
-        data = await f.read()
+        data = await f.read(MAX_BYTES - total + 1)
         total += len(data)
         if total > MAX_BYTES:
             raise HTTPException(status_code=413, detail="Upload exceeds 50 MB total limit")
@@ -255,7 +257,7 @@ def build_router(db) -> APIRouter:
         blobs = await _read_uploads(uploads)
         names = [n for n, _ in blobs]
         label = names[0] if len(names) == 1 else f"{names[0]} +{len(names) - 1} more"
-        key = _cache_key([d for _, d in blobs], opts, min_length)
+        key = _cache_key([name.encode("utf-8") + b"\x00" + data for name, data in blobs], opts, min_length)
         hit = await db.jobs.find_one({"user_id": user["_id"], "cache_key": key, "status": "completed"},
                                      sort=[("created_at", -1)])
         if hit:
@@ -479,7 +481,7 @@ def build_router(db) -> APIRouter:
     async def v1_optimize(body: OptimizeTextRequest, user: dict = Depends(A.get_user_by_api_key)):
         opts = _opts(body.threshold, body.mode, body.guard, body.order, body.fold_tables, body.budget)
         raw = body.text.encode("utf-8")
-        key = _cache_key([raw, body.mode.encode()], opts, body.min_length)
+        key = _cache_key([user["_id"].encode(), raw, body.mode.encode()], opts, body.min_length)
 
         def sources():
             src = parse_text(body.text, body.min_length, body.mode)
@@ -503,7 +505,9 @@ def build_router(db) -> APIRouter:
         opts = _opts(threshold, mode, guard, order, fold_tables, budget)
         min_length = max(1, min(200, min_length))
         blobs = await _read_uploads(uploads)
-        key = _cache_key([d for _, d in blobs] + [b"file"], opts, min_length)
+        key = _cache_key([user["_id"].encode(), b"file"] +
+                         [name.encode("utf-8") + b"\x00" + data for name, data in blobs],
+                         opts, min_length)
         result, cached = await _cached_optimize(key, lambda: _parse_all(blobs, min_length), opts)
         await _log_usage(user["_id"], "api", result["stats"], user.get("_api_key_id"), cached,
                          sum(len(d) for _, d in blobs))

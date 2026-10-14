@@ -61,3 +61,5 @@ def test_both_windows_portable_formats_are_built_and_released():
     assert "TokenForge-Windows-x64.zip" in workflow
     assert "TokenForge-Setup-Windows-x64.exe" in workflow
     assert "Single-file offline self-test failed" in workflow
+    assert "Start-Process -FilePath $portable" in workflow
+    assert "-Wait -PassThru" in workflow

@@ -40,10 +40,14 @@ connection, server, login or AI model.
   equations rendered as pictures, embedded data or other features.
 * If SHA-256 changes but extracted text is unchanged, the report flags
   **REVIEW REQUIRED**. It does not say the files are identical.
-* Every sentence boundary is **not** automatically identified. A parser
-  fragment can be a sentence, line, paragraph or table row. Exact passages
-  are guaranteed to compare equal as strings **after extraction**, not to
-  have identical meaning or original visual formatting.
+* A separate **sentence-candidate index** finds exactly repeated substrings
+  within paragraphs and records character offsets back to the extracted
+  fragment. It uses punctuation/whitespace as candidate sentence boundaries;
+  abbreviations, equations and unusual punctuation are **not** guaranteed to
+  be segmented perfectly. Only fully identical extracted strings are grouped.
+* A parser fragment can also be a sentence, line, paragraph or table row.
+  Exact matches mean identical extracted text—not identical meaning or original
+  visual formatting.
 * The tool does not determine which equation is correct, why a theory changed,
   whether an experiment succeeded, or which design is current. Only the user's
   ordering and notes provide those claims.

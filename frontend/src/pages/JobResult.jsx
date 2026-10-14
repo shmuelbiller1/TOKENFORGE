@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useHotkeys } from "@/lib/hotkeys";
+import ShareDialog from "@/components/ShareDialog";
 import { useParams, useNavigate } from "react-router-dom";
 import api, { API } from "@/lib/api";
 import { toast } from "sonner";
@@ -12,6 +14,8 @@ import {
   Copy,
   ShieldCheck,
   ArrowCounterClockwise,
+  ShareNetwork,
+  Scissors,
 } from "@phosphor-icons/react";
 import { KindBadge, RecordText, Segmented } from "@/components/EngineOptions";
 
@@ -105,6 +109,8 @@ export default function JobResult() {
   const [debounced, setDebounced] = useState("");
   const [kind, setKind] = useState("");
   const [exportFmt, setExportFmt] = useState("txt");
+  const [shareOpen, setShareOpen] = useState(false);
+  const searchRef = useRef(null);
 
   useEffect(() => {
     api.get(`/jobs/${jobId}`).then((r) => setJob(r.data)).catch(() => navigate("/app"));
@@ -137,10 +143,21 @@ export default function JobResult() {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(frags.total / PAGE));
+  useHotkeys({
+    "/": () => searchRef.current?.focus(),
+    c: () => copyText(),
+    e: () => download(`export?format=${exportFmt}`),
+    r: () => download("reconstruct"),
+    s: () => setShareOpen(true),
+    arrowleft: () => setPage((p) => Math.max(1, p - 1)),
+    arrowright: () => setPage((p) => Math.min(totalPages, p + 1)),
+    escape: () => searchRef.current?.blur(),
+  }, !!job);
+
   if (!job) return <div className="text-[#9CA3AF]">Loading…</div>;
   const s = job.stats || {};
   const sources = s.sources || [];
-  const totalPages = Math.max(1, Math.ceil(frags.total / PAGE));
   const chartData = [
     { name: "Before", value: s.tokens_before || 0 },
     { name: "After", value: s.tokens_after || 0 },
@@ -148,6 +165,7 @@ export default function JobResult() {
 
   return (
     <div className="space-y-8" data-testid="job-result">
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} job={job} onChange={(patch) => setJob((j) => ({ ...j, ...patch }))} />
       <button onClick={() => navigate("/app")} className="btn-ghost py-2 px-3 text-xs" data-testid="back-button">
         <ArrowLeft size={16} weight="bold" /> Back
       </button>
@@ -171,7 +189,10 @@ export default function JobResult() {
           </div>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          <button onClick={copyText} className="btn-ghost" data-testid="copy-text-button">
+          <button onClick={() => setShareOpen(true)} className="btn-ghost" data-testid="share-button" title="Share (S)">
+            <ShareNetwork size={18} weight="bold" /> {job.share_enabled ? "Shared" : "Share"}
+          </button>
+          <button onClick={copyText} className="btn-ghost" data-testid="copy-text-button" title="Copy (C)">
             <Copy size={18} weight="bold" /> Copy text
           </button>
           <button onClick={() => download("reconstruct")} className="btn-ghost" data-testid="reconstruct-button"
@@ -196,11 +217,19 @@ export default function JobResult() {
         </div>
       </div>
 
+      {s.budget_omitted_records > 0 && (
+        <div className="border-2 border-[#B45309] text-[#B45309] px-4 py-3 text-sm flex items-center gap-2" data-testid="budget-notice">
+          <Scissors size={18} weight="bold" />
+          Token budget {fmt(s.budget)}: {fmt(s.budget_omitted_records)} lower-priority records left out of the text output.
+          The full lossless output is {fmt(s.tokens_after_full)} tokens ({s.token_reduction_pct_lossless}% smaller), and the bundle and rebuild still contain everything.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi testid="kpi-tokens-saved" label="Tokens saved" value={fmt(s.tokens_saved)} accent="text-[#002FA7]" sub={`${s.token_reduction_pct}% smaller`} />
         <Kpi testid="kpi-tokens" label="Tokens before → after" value={fmt(s.tokens_before)} sub={`→ ${fmt(s.tokens_after)} after`} />
         <Kpi testid="kpi-records" label="Fragments → records" value={fmt(s.fragments_in)} accent="text-[#FF3B30]" sub={`→ ${fmt(s.unique_concepts)} records (${s.dup_reduction_pct}% fewer)`} />
-        <Kpi testid="kpi-templates" label="Templates" value={fmt(s.templates)} sub={`${fmt(s.values_folded)} lines folded into slots`} />
+        <Kpi testid="kpi-templates" label="Templates · tables" value={`${fmt(s.templates)} · ${fmt(s.tables_folded ?? 0)}`} sub={`${fmt(s.values_folded)} lines in slots · ${fmt(s.rows_in_tables ?? 0)} table rows`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -297,8 +326,8 @@ export default function JobResult() {
           </div>
           <div className="relative">
             <MagnifyingGlass size={16} weight="bold" className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search records…"
-              className="input-brutal pl-9 w-72" data-testid="fragment-search" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search records… (/)"
+              ref={searchRef} className="input-brutal pl-9 w-72" data-testid="fragment-search" />
           </div>
         </div>
 

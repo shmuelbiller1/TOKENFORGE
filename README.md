@@ -62,12 +62,18 @@ TokenForge is linear-time, deterministic and audit-friendly. It never hides a va
 | **Exact dedup** | Unicode-aware normalization (case, punctuation, spacing) with numbers kept intact, using O(n) hashing |
 | **Near-dup detection** | Vectorized 128-permutation MinHash + banded LSH tuned to your threshold. Every candidate pair is verified, then merged with union-find |
 | **Lossless templates** | Same-shape lines become `Order {1041\|1042\|1043} shipped`. Multi-slot templates keep the values of each row together: `10:{1} user {2} login :: 01\|5; 02\|6` |
+| **Table folding** | CSV/XLSX/JSON/JSONL/YAML rows are written as a table with the column names once, and columns that never change are moved into the header (`[table id\|plan; every row: city=Berlin]`). This is the biggest token saver on structured data (often 80–95 %) |
+| **Token budget** | `budget=4000` fits the output into N tokens. The most repeated records are kept first and the cut is stated in the output, while the map still holds everything |
+| **Instant cache** | Re-uploading identical content with the same settings returns the earlier result in ~0 ms (per user for jobs, in-memory LRU for the API) |
 | **Fact Guard** | A near-duplicate is folded only if every number/ID/name it holds is already in the kept line (`facts`), or every word (`strict`) |
 | **Content-aware modes** | Word shingles for prose and tables, character 5-grams for logs and code. Code blocks are never templated and need ≥ 0.92 similarity |
 | **Multi-file & ZIP** | Files in one job are deduplicated against each other, and each record lists the files it came from |
 | **Reconstruction map** | Stores (record, original) for every input fragment. You can rebuild the input via the UI, API or CLI |
 | **Round-trip verification** | Each run rebuilds its input and sets `lossless_verified` |
 | **Accounts, API keys, admin** | Email/password (JWT httpOnly cookies, bcrypt), per-user hashed API keys, owner console |
+| **Shareable reports** | Public link with stats and an output preview. The owner can turn it off at any time, and originals and the map are never exposed |
+| **Usage analytics** | Tokens saved and runs per day for each user and each API key, plus an owner-wide chart and top savers |
+| **Keyboard shortcuts** | `?` shows the list; `g d/k/h/a` navigate, `u` upload, `Enter` start, `/` search, `c` copy, `e` export, `r` rebuild, `s` share, `⌘/Ctrl+Enter` run the playground |
 | **Playground** | `/how-it-works` lets anyone paste text and watch the engine run, no signup needed |
 | **CLI** | `backend/cli.py` runs the same engine offline |
 
@@ -86,6 +92,21 @@ TokenForge is linear-time, deterministic and audit-friendly. It never hides a va
    - **Template**: members with the same token length and at most 4 varying spans (≥ 50 % constant tokens) become one line. All values are written into it, up to 64 rows per template line.
    - **Fact Guard**: everything else folds into the longest member, but only if its facts are a subset of that member's. Otherwise it stays a separate record.
 7. **Verify**: rebuild `originals[map]` and compare it to the input stream.
+8. **Render**: tabular records with the same columns are folded into one table, constant columns are hoisted, and the optional token budget is applied. `tokens_after` is measured on this final text.
+
+### Design decisions (why this approach)
+The goal is the fewest tokens an LLM must read while it can still answer any question the raw data could answer. That rules some things out and points to others:
+
+| Option | Verdict |
+|---|---|
+| LLM summarization | ✗ Costs tokens to save tokens, isn't deterministic, and can invent or drop facts |
+| Embedding/semantic dedup | ✗ as default: needs a model, and "semantically similar" lines can still hold different facts. Possible later as an opt-in |
+| gzip/base64 or other byte compression | ✗ LLMs can't read it, and it often *raises* token counts |
+| Exact + MinHash/LSH dedup | ✓ Linear time, and handles the most common waste (repeated lines) |
+| **Structure-aware rewriting** (templates, table folding, constant hoisting) | ✓ The biggest win: it removes repeated *structure* rather than repeated lines, while every value stays readable |
+| Reconstruction map + verification | ✓ Makes "no data loss" testable instead of a promise |
+
+Order of savings on typical data: **table folding > templates > exact dedup > near-dup folding**.
 
 ## Guarantees
 - **Nothing is dropped.** Every input fragment maps to exactly one record and one stored original (`/reconstruct`, `format=bundle`, `cli.py reconstruct`).
@@ -107,6 +128,16 @@ TokenForge is linear-time, deterministic and audit-friendly. It never hides a va
 Encodings: UTF-8 (with or without BOM), UTF-16, and a CP-1252 fallback.
 
 ## Quick start
+
+### Docker (one command)
+```bash
+git clone https://github.com/<you>/tokenforge.git && cd tokenforge
+cp .env.docker.example .env        # optional, but set your own secrets
+docker compose up -d --build       # → http://localhost:8080
+```
+Log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. nginx serves the UI and proxies `/api` to the backend, and MongoDB data lives in the `mongo-data` volume. Cookies are `Secure`, which browsers allow on `http://localhost`. On any other host, put HTTPS in front (Caddy, Traefik or a cloud load balancer).
+
+### Manual
 Requirements: Python 3.11+, Node 18+ with Yarn, MongoDB 6+.
 
 ```bash
@@ -115,7 +146,7 @@ git clone https://github.com/<you>/tokenforge.git && cd tokenforge
 # backend
 cd backend
 cp .env.example .env            # then edit the secrets
-pip install -r requirements.txt
+pip install -r requirements-core.txt
 uvicorn server:app --host 0.0.0.0 --port 8001
 
 # frontend (new terminal)
@@ -132,6 +163,8 @@ cd backend
 python cli.py optimize data.csv logs.zip notes.md -f annotated -o optimized.txt
 python cli.py optimize export.json -m tabular -g strict -t 0.9 -f json -o records.json
 python cli.py optimize big.log -f bundle -o bundle.json          # lossless bundle
+python cli.py optimize export.csv -b 4000                         # fit into a 4k-token budget
+python cli.py optimize export.csv --no-fold                       # keep "col: value" rows
 python cli.py reconstruct bundle.json -o original.txt             # rebuild every fragment
 cat anything.txt | python cli.py optimize -                       # stdin
 ```
@@ -165,7 +198,7 @@ To rebuild fragment *i*: `records[map.record[i]].originals[map.original[i]]`.
 curl -X POST "https://your-host/api/v1/optimize/file?mode=auto&format=annotated" \
   -H "X-API-Key: tio_..." -F files=@logs.zip -F files=@customers.csv
 ```
-Query params: `threshold, mode, guard, order, min_length, include_map, format (text|annotated)`. The limit is 50 MB total.
+Query params: `threshold, mode, guard, order, fold_tables, budget, min_length, include_map, format (text|annotated)`. The JSON endpoint accepts the same fields in the body. Repeating an identical request returns `stats.cached: true` instantly. The limit is 50 MB total.
 
 ### Other endpoints
 | Method & path | Auth | Purpose |
@@ -178,6 +211,10 @@ Query params: `threshold, mode, guard, order, min_length, include_map, format (t
 | `GET /api/jobs/{id}/export?format=` | cookie | Streamed export (see below) |
 | `GET /api/jobs/{id}/reconstruct` | cookie | Every original fragment, in input order (`X-Lossless-Verified` header) |
 | `DELETE /api/jobs/{id}` | cookie | Delete job, records and map |
+| `POST /api/jobs/{id}/share` `{"enabled": true}` | cookie | Turn the public report link on or off |
+| `GET /api/share/{token}` | none | Public report: stats and an output preview |
+| `GET /api/usage?days=30` | cookie | Your daily usage, per-key totals |
+| `GET /api/admin/usage?days=30` | admin | All users' daily usage and top savers |
 | `POST /api/auth/register · login · logout · refresh`, `GET /api/auth/me` | — | Accounts |
 | `GET/POST/DELETE /api/keys` | cookie | API keys (shown once, stored as SHA-256) |
 | `GET /api/admin/stats · users`, `PATCH/DELETE /api/admin/users/{id}` | admin | Owner console |
@@ -189,6 +226,8 @@ Query params: `threshold, mode, guard, order, min_length, include_map, format (t
 | `mode` | `auto` `prose` `tabular` `log` `code` | `auto` | Shingling and normalization strategy (auto = per file) |
 | `guard` | `facts` `strict` `off` | `facts` | What a near-duplicate must share with the kept line before it folds |
 | `order` | `original` `frequency` | `original` | Keep reading order, or put the most repeated first |
+| `fold_tables` | true / false | true | Fold rows with the same columns into a compact table |
+| `budget` | ≥ 50 tokens | none | Fit the output into N tokens (most repeated records first) |
 | `min_length` | 1 – 200 | 3 | Shorter fragments are skipped while parsing |
 
 ## Export formats
@@ -217,10 +256,12 @@ backend/
   tests/            engine tests + API tests
 frontend/src/
   pages/            Landing, HowItWorks (+ playground), Dashboard, JobResult, ApiKeys, Admin, Login, Register
-  components/       AppShell, PublicHeader, EngineOptions, Playground
+  pages/SharedReport.jsx  public /r/:token report
+  components/       AppShell, PublicHeader, EngineOptions, Playground, UploadReview, ShareDialog, UsageChart, Shortcuts
+  lib/hotkeys.js    keyboard shortcut hook
 samples/            example files for every format family
 ```
-Storage (MongoDB): `users`, `api_keys`, `jobs`, `fragments` (records), and GridFS bucket `reconstruction` (gzip of originals + map, which keeps large jobs under the 16 MB document limit).
+Storage (MongoDB): `users`, `api_keys`, `jobs`, `fragments` (records), `usage` (one event per run), and GridFS bucket `reconstruction` (gzip of originals + map, which keeps large jobs under the 16 MB document limit).
 
 ## Tests
 ```bash
@@ -239,9 +280,9 @@ The engine tests include a fuzz round-trip across every guard and order combinat
 
 ## Roadmap
 - Streaming parser for files larger than RAM
-- Per-key quotas and usage charts
+- Per-key quotas
+- Optional phrase legend (short codes for long phrases that repeat across lines)
 - Semantic (embedding) dedup as an optional add-on
-- Docker Compose one-liner
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 

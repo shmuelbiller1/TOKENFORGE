@@ -256,6 +256,10 @@ async def startup():
     await db.api_keys.create_index("user_id")
     await db.jobs.create_index("user_id")
     await db.fragments.create_index([("job_id", 1), ("order", 1)])
+    await db.usage.create_index([("user_id", 1), ("day", 1)])
+    await db.usage.create_index("day")
+    await db.jobs.create_index("share_token", sparse=True)
+    await db.jobs.create_index([("user_id", 1), ("cache_key", 1)])
     await reap_stale_jobs(db)
     # seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com").lower()

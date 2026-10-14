@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { Users, Lightning, Key, ChartLineUp, Trash, Power } from "@phosphor-icons/react";
+import UsageChart, { useUsage } from "@/components/UsageChart";
 
 const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString());
 
@@ -15,6 +16,7 @@ const Kpi = ({ icon: Icon, label, value, accent }) => (
 );
 
 export default function Admin() {
+  const usage = useUsage("/admin/usage");
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
 
@@ -69,6 +71,24 @@ export default function Admin() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Kpi icon={ChartLineUp} label="Total tokens saved" value={fmt(stats?.total_tokens_saved)} accent="text-[#002FA7]" />
         <Kpi icon={ChartLineUp} label="Total tokens processed" value={fmt(stats?.total_tokens_processed)} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="xl:col-span-2">
+          <UsageChart title="Savings over time · all users" usage={usage} testid="admin-usage" />
+        </div>
+        <div className="card-brutal overflow-hidden" data-testid="top-users">
+          <div className="bg-[#0A0A0A] text-white px-4 py-3 text-xs uppercase tracking-wider font-bold">Top savers · {usage.days}d</div>
+          <ul className="divide-y-2 divide-[#E5E7EB]">
+            {(usage.data?.top_users || []).map((u, i) => (
+              <li key={u.user_id} className="px-4 py-2.5 flex justify-between gap-3 text-sm" data-testid={`top-user-${i}`}>
+                <span className="truncate"><span className="text-[#9CA3AF] mr-2">{i + 1}.</span>{u.email}</span>
+                <span className="font-bold tabular-nums text-[#002FA7] whitespace-nowrap">{fmt(u.tokens_saved)}</span>
+              </li>
+            ))}
+            {!usage.data?.top_users?.length && <li className="px-4 py-6 text-sm text-[#9CA3AF]">No usage yet.</li>}
+          </ul>
+        </div>
       </div>
 
       <div>

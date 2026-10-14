@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { formatApiErrorDetail } from "@/lib/api";
-import { EngineOptions } from "@/components/EngineOptions";
+import { EngineOptions, DEFAULT_OPTS } from "@/components/EngineOptions";
+import UploadReview from "@/components/UploadReview";
+import { useHotkeys } from "@/lib/hotkeys";
 import { toast } from "sonner";
 import {
   UploadSimple,
@@ -32,7 +34,8 @@ function StatusBadge({ status }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
-  const [opts, setOpts] = useState({ threshold: 0.82, mode: "auto", guard: "facts", order: "original" });
+  const [opts, setOpts] = useState(DEFAULT_OPTS);
+  const [staged, setStaged] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef(null);
@@ -68,36 +71,52 @@ export default function Dashboard() {
 
   useEffect(() => () => pollRef.current && clearInterval(pollRef.current), []);
 
-  const upload = async (fileList) => {
-    const files = Array.from(fileList || []);
-    if (!files.length) return;
-    const total = files.reduce((a, f) => a + f.size, 0);
-    if (total > 50 * 1024 * 1024) {
-      toast.error("Total upload exceeds 50 MB");
-      return;
-    }
+  const stage = (fileList) => {
+    const incoming = Array.from(fileList || []);
+    if (!incoming.length) return;
+    setStaged((cur) => {
+      const seen = new Set(cur.map((f) => `${f.name}:${f.size}`));
+      return [...cur, ...incoming.filter((f) => !seen.has(`${f.name}:${f.size}`))];
+    });
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const start = async () => {
+    if (!staged.length || uploading) return;
     setUploading(true);
     try {
       const form = new FormData();
-      files.forEach((f) => form.append("files", f));
-      await api.post("/jobs", form, {
-        params: opts,
+      staged.forEach((f) => form.append("files", f));
+      const params = { ...opts, budget: opts.budget || undefined };
+      const { data } = await api.post("/jobs", form, {
+        params,
         headers: { "Content-Type": "multipart/form-data" },
       });
-      toast.success(files.length > 1 ? `Optimizing ${files.length} files together…` : `Optimizing ${files[0].name}…`);
+      setStaged([]);
+      if (data.cached) {
+        toast.success("Instant result: this exact upload was already optimized");
+        navigate(`/app/jobs/${data.id}`);
+        return;
+      }
+      toast.success(staged.length > 1 ? `Optimizing ${staged.length} files together…` : `Optimizing ${staged[0].name}…`);
       await loadJobs();
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail) || e.message);
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   };
+
+  useHotkeys({
+    u: () => fileRef.current?.click(),
+    enter: () => start(),
+    escape: () => setStaged([]),
+  });
 
   const onDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files?.length) upload(e.dataTransfer.files);
+    if (e.dataTransfer.files?.length) stage(e.dataTransfer.files);
   };
 
   const remove = async (id, e) => {
@@ -141,7 +160,7 @@ export default function Dashboard() {
           type="file"
           multiple
           className="hidden"
-          onChange={(e) => upload(e.target.files)}
+          onChange={(e) => stage(e.target.files)}
           data-testid="file-input"
         />
         <div className="flex flex-col items-center gap-3">
@@ -153,13 +172,24 @@ export default function Dashboard() {
             )}
           </div>
           <div className="font-head font-bold text-lg">
-            {uploading ? "Uploading…" : "Drop files or click to upload"}
+            {uploading ? "Uploading…" : "Drop files or click to add (U)"}
           </div>
           <div className="overline max-w-2xl leading-relaxed" data-testid="supported-formats">
             TXT · MD · CSV · TSV · JSON · JSONL · YAML · XML · HTML · PDF · DOCX · XLSX · PPTX · RTF · EML · LOG · 40+ code types · ZIP · unknown → auto-detected
           </div>
         </div>
       </div>
+
+      {staged.length > 0 && (
+        <UploadReview
+          files={staged}
+          opts={opts}
+          busy={uploading}
+          onRemove={(i) => setStaged((cur) => cur.filter((_, x) => x !== i))}
+          onClear={() => setStaged([])}
+          onStart={start}
+        />
+      )}
 
       <div className="card-brutal p-6" data-testid="engine-options">
         <EngineOptions opts={opts} setOpts={setOpts} />

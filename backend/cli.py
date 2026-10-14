@@ -4,6 +4,7 @@
   python cli.py optimize data.csv logs.zip -f annotated -o optimized.txt
   python cli.py optimize notes.md -f bundle -o bundle.json      # lossless bundle
   python cli.py reconstruct bundle.json -o original.txt         # rebuild originals
+  python cli.py optimize export.csv -b 4000                     # fit into a 4k-token budget
   cat file.txt | python cli.py optimize -                       # stdin
 """
 from __future__ import annotations
@@ -13,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from optimizer import KINDS, optimize_sources, reconstruct, render
+from optimizer import KINDS, optimize_sources, reconstruct
 from parsers import parse_text, parse_upload
 
 
@@ -35,14 +36,15 @@ def cmd_optimize(a: argparse.Namespace) -> int:
     if not sources:
         print("error: no readable text fragments found", file=sys.stderr)
         return 1
-    res = optimize_sources(sources, threshold=a.threshold, mode=a.mode, guard=a.guard, order=a.order)
+    res = optimize_sources(sources, threshold=a.threshold, mode=a.mode, guard=a.guard, order=a.order,
+                           fold_tables=not a.no_fold, budget=a.budget)
     s = res["stats"]
     print(f"[tokenforge] {s['fragments_in']:,} fragments -> {s['unique_concepts']:,} records | "
           f"tokens {s['tokens_before']:,} -> {s['tokens_after']:,} (-{s['token_reduction_pct']}%) | "
-          f"templates {s['templates']} | lossless {s['lossless_verified']} | {s['elapsed_ms']} ms",
+          f"templates {s['templates']} | tables {s['tables_folded']} | lossless {s['lossless_verified']} | {s['elapsed_ms']} ms",
           file=sys.stderr)
     if a.format in ("text", "annotated"):
-        _write(render(res["records"], a.format), a.out)
+        _write(res["output"]["annotated" if a.format == "annotated" else "text"], a.out)
     else:
         payload = {"stats": s, "records": res["records"] if a.format == "bundle" else
                    [{k: v for k, v in r.items() if k != "originals"} for r in res["records"]]}
@@ -71,6 +73,8 @@ def main() -> int:
     o.add_argument("-g", "--guard", default="facts", choices=("facts", "strict", "off"))
     o.add_argument("--order", default="original", choices=("original", "frequency"))
     o.add_argument("--min-length", type=int, default=3)
+    o.add_argument("-b", "--budget", type=int, help="fit output into N tokens (keeps most repeated first)")
+    o.add_argument("--no-fold", action="store_true", help="disable table folding")
     o.add_argument("-f", "--format", default="text", choices=("text", "annotated", "json", "bundle"))
     o.add_argument("-o", "--out")
     o.set_defaults(fn=cmd_optimize)

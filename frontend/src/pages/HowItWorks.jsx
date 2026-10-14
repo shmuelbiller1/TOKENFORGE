@@ -19,6 +19,8 @@ const STEPS = [
     "\"Order {1041|1042|1043} shipped to Berlin\""],
   ["07", "Verify", "A reconstruction map (record, original) is recorded for every input fragment. The engine rebuilds the full input stream from it and checks it is byte-identical before it marks the job lossless.",
     "lossless_verified: true"],
+  ["08", "Fold & render", "Rows that share the same columns become one table: column names are written once and columns that never change move into the header. An optional token budget keeps the most repeated records and says what it left out.",
+    "[table id|plan; every row: city=Berlin]\n1041|pro\n1042|free"],
 ];
 
 const GUARANTEES = [

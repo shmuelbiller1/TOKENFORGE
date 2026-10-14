@@ -116,3 +116,22 @@ def test_binary_rejected():
     except ValueError:
         return
     raise AssertionError("binary input should be rejected")
+
+
+def test_table_folding_writes_columns_once_and_hoists_constants():
+    from optimizer import render
+    src = parse_upload(b"id,city,plan\n1,Berlin,pro\n2,Berlin,free\n3,Berlin,pro", "t.csv")
+    res = optimize_sources(src)
+    assert res["output"]["text"] == "[table id|plan; every row: city=Berlin]\n1|pro\n2|free\n3|pro"
+    assert res["stats"]["tables_folded"] == 1
+    assert render(res["records"], "text", fold_tables=False).startswith("id: 1 | city: Berlin")
+    _roundtrip(res, src[0].fragments)
+
+
+def test_token_budget_keeps_most_repeated_and_marks_partial():
+    frags = ["very common line here"] * 50 + [f"rare unique line number {i} with words" for i in range(200)]
+    res = optimize_sources([("f", frags, "prose")], budget=60, templates=False)
+    s = res["stats"]
+    assert s["tokens_after"] <= 60 and s["output_complete"] is False and s["budget_omitted_records"] > 0
+    assert res["output"]["text"].startswith("very common line here")
+    _roundtrip(res, frags)

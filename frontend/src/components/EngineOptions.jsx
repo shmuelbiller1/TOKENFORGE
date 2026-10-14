@@ -23,6 +23,8 @@ export const Segmented = ({ label, hint, value, options, onChange, testid }) => 
   </div>
 );
 
+export const DEFAULT_OPTS = { threshold: 0.82, mode: "auto", guard: "facts", order: "original", fold_tables: true, budget: "" };
+
 export const MODE_OPTIONS = [
   { value: "auto", label: "Auto", title: "Detect per file" },
   { value: "prose", label: "Prose" },
@@ -75,6 +77,17 @@ export function EngineOptions({ opts, setOpts, compact }) {
         hint={GUARD_HINT[opts.guard]} />
       <Segmented label="Output order" value={opts.order} options={ORDER_OPTIONS} onChange={set("order")} testid="order-select"
         hint={opts.order === "original" ? "Keeps the reading order of the source." : "Most repeated first."} />
+      <Segmented label="Table folding" value={opts.fold_tables ? "on" : "off"} testid="fold-select"
+        options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]}
+        onChange={(v) => set("fold_tables")(v === "on")}
+        hint="Writes column names once and moves columns that never change into the header. Often removes 50–90% of the tokens in CSV/JSON." />
+      <div data-testid="budget-control">
+        <div className="overline mb-2">Token budget (optional)</div>
+        <input type="number" min={50} step={100} placeholder="no limit" value={opts.budget}
+          onChange={(e) => set("budget")(e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0))}
+          className="input-brutal w-40" data-testid="budget-input" />
+        <p className="text-xs text-[#4B5563] mt-2">Fit the output into N tokens. The most repeated records are kept and the rest are listed as omitted. The map still holds everything.</p>
+      </div>
     </div>
   );
 }

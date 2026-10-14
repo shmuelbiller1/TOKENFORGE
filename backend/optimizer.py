@@ -270,6 +270,8 @@ def optimize_sources(
     guard: str = "facts",
     order: str = "original",
     templates: bool = True,
+    fold_tables: bool = True,
+    budget: Optional[int] = None,
     num_perm: int = 128,
 ) -> Dict:
     """sources: iterable of (name, fragments, kind) tuples or objects with those attributes."""
@@ -357,7 +359,7 @@ def optimize_sources(
         if templates:
             by_len: Dict[int, List[int]] = {}
             for u in members:
-                if uniq[u]["kind"] == "code":
+                if uniq[u]["kind"] == "code" or (fold_tables and uniq[u]["kind"] == "tabular"):
                     pool.append(u)
                 else:
                     by_len.setdefault(len(uniq[u]["text"].split()), []).append(u)
@@ -435,7 +437,10 @@ def optimize_sources(
     rebuilt_ok = all(out_records[map_record[i]]["originals"][map_original[i]] == fragments[i] for i in range(n))
     lap("verify", t)
 
-    tokens_after = sum(rec_tokens)
+    t = time.perf_counter()
+    output = build_output(out_records, fold_tables, budget)
+    lap("render", t)
+    tokens_after = output["tokens"]
     kinds: Dict[str, int] = {}
     for s in src_meta:
         kinds[s["kind"]] = kinds.get(s["kind"], 0) + s["fragments"]
@@ -458,6 +463,14 @@ def optimize_sources(
         "guard_splits": guard_splits,
         "cross_source_records": sum(1 for r in out_records if len(r["sources"]) > 1),
         "lossless_verified": rebuilt_ok,
+        "tables_folded": output["tables"],
+        "rows_in_tables": output["table_rows"],
+        "budget": budget,
+        "budget_omitted_records": output["omitted"],
+        "tokens_after_full": output["tokens_full"],
+        "token_reduction_pct_lossless": round((1 - output["tokens_full"] / tokens_before) * 100, 2)
+        if tokens_before else 0.0,
+        "output_complete": output["omitted"] == 0,
         "threshold": threshold,
         "mode": mode,
         "guard": guard,
@@ -468,7 +481,8 @@ def optimize_sources(
         "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1),
     }
     return {"stats": stats, "records": out_records,
-            "map": {"record": map_record, "original": map_original}}
+            "map": {"record": map_record, "original": map_original},
+            "output": {"text": output["text"], "annotated": output["annotated"]}}
 
 
 def reconstruct(records: List[dict], map_record: List[int], map_original: List[int]) -> List[str]:
@@ -476,8 +490,113 @@ def reconstruct(records: List[dict], map_record: List[int], map_original: List[i
     return [records[r]["originals"][o] for r, o in zip(map_record, map_original)]
 
 
-def render(records: List[dict], fmt: str = "text") -> str:
-    """LLM-ready rendering: 'text' (one line per record) or 'annotated' (with ×count)."""
-    if fmt == "annotated":
-        return "\n".join(f"[x{r['count']}] {r['text']}" if r["count"] > 1 else r["text"] for r in records)
-    return "\n".join(r["text"] for r in records)
+_SEP = " | "
+
+
+def row_schema(text: str):
+    """'k: v | k: v' row -> (keys, values) or None."""
+    if "\n" in text or " :: " in text or _SEP not in text:
+        return None
+    keys, vals = [], []
+    for i, part in enumerate(text.split(_SEP)):
+        k, sep, v = part.partition(": ")
+        if not sep and part.endswith(":"):
+            k, sep, v = part[:-1], ":", ""
+        if not sep or not k or len(k) > 60:
+            if i == 0:
+                keys.append("@path")
+                vals.append(part)
+                continue
+            return None
+        keys.append(k)
+        vals.append(v)
+    if len(set(keys)) != len(keys):
+        return None
+    return tuple(keys), vals
+
+
+def _cell(v: str) -> str:
+    return v.replace("|", "\\|").replace("\n", " ")
+
+
+def _plain(r: dict, annotated: bool) -> str:
+    return f"[x{r['count']}] {r['text']}" if annotated and r["count"] > 1 else r["text"]
+
+
+def _table(block: dict, annotated: bool) -> str:
+    keys, rows, recs = block["keys"], block["rows"], block["recs"]
+    if len(rows) == 1:
+        return _plain(recs[0], annotated)
+    const = [i for i in range(len(keys)) if len({r[i] for r in rows}) == 1]
+    var = [i for i in range(len(keys)) if i not in const]
+    if not var:
+        return "\n".join(_plain(r, annotated) for r in recs)
+    cols = [keys[i] for i in var] + (["#"] if annotated else [])
+    head = "[table " + "|".join(cols)
+    if const:
+        head += "; every row: " + "; ".join(f"{keys[i]}={rows[0][i]}" for i in const)
+    lines = [head + "]"]
+    for vals, r in zip(rows, recs):
+        cells = [_cell(vals[i]) for i in var] + ([str(r["count"])] if annotated else [])
+        lines.append("|".join(cells))
+    return "\n".join(lines)
+
+
+def render(records: List[dict], fmt: str = "text", fold_tables: bool = True) -> str:
+    """LLM-ready text. fmt: 'text' | 'annotated' (adds xcount). Tables are folded:
+    column names written once, constant columns hoisted into the header."""
+    annotated = fmt == "annotated"
+    items: list = []
+    blocks: Dict[tuple, dict] = {}
+    for r in records:
+        sch = row_schema(r["text"]) if fold_tables else None
+        if sch is None:
+            items.append(r)
+            continue
+        b = blocks.get(sch[0])
+        if b is None:
+            b = blocks[sch[0]] = {"keys": sch[0], "rows": [], "recs": []}
+            items.append(b)
+        b["rows"].append(sch[1])
+        b["recs"].append(r)
+    return "\n".join(_table(i, annotated) if "keys" in i else _plain(i, annotated) for i in items)
+
+
+def build_output(records: List[dict], fold_tables: bool = True, budget: Optional[int] = None) -> dict:
+    """Render the final output; if a token budget is set, keep the highest-coverage records."""
+    text = render(records, "text", fold_tables)
+    full = count_tokens(text) if text else 0
+    keep, omitted = records, 0
+    if budget and full > budget:
+        prio = sorted(range(len(records)), key=lambda i: (-records[i]["count"], records[i]["tokens"]))
+        lo, hi = 0, len(prio)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            sel = sorted(prio[:mid])
+            if count_tokens(render([records[i] for i in sel], "text", fold_tables)) <= budget - 30:
+                lo = mid
+            else:
+                hi = mid - 1
+        sel = sorted(prio[:lo])
+        keep = [records[i] for i in sel]
+        omitted = len(records) - len(keep)
+        text = render(keep, "text", fold_tables)
+    note = ""
+    if omitted:
+        lost = sum(r["count"] for r in records) - sum(r["count"] for r in keep)
+        note = (f"\n[budget: {omitted} of {len(records)} records ({lost} source lines) omitted; "
+                f"full data in the TokenForge bundle]")
+    text += note
+    tables = [b for b in _blocks(keep) if len(b) > 1] if fold_tables else []
+    return {"text": text, "annotated": render(keep, "annotated", fold_tables) + note,
+            "tokens": count_tokens(text) if text else 0, "tokens_full": full, "omitted": omitted,
+            "tables": len(tables), "table_rows": sum(len(b) for b in tables)}
+
+
+def _blocks(records: List[dict]) -> List[list]:
+    groups: Dict[tuple, list] = {}
+    for r in records:
+        sch = row_schema(r["text"])
+        if sch:
+            groups.setdefault(sch[0], []).append(r)
+    return list(groups.values())

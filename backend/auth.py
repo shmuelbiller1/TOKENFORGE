@@ -139,5 +139,6 @@ async def get_user_by_api_key(request: Request) -> dict:
          "$inc": {"usage_count": 1}},
     )
     user["_id"] = str(user["_id"])
+    user["_api_key_id"] = str(key_doc["_id"])
     user.pop("password_hash", None)
     return user

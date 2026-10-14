@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { API, formatApiErrorDetail } from "@/lib/api";
 import { toast } from "sonner";
 import { Key, Plus, Copy, Trash, Check, Terminal } from "@phosphor-icons/react";
+import UsageChart, { useUsage } from "@/components/UsageChart";
 
 export default function ApiKeys() {
   const [keys, setKeys] = useState([]);
@@ -9,6 +10,8 @@ export default function ApiKeys() {
   const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState(null);
   const [copied, setCopied] = useState(false);
+  const usage = useUsage("/usage");
+  const byKey = usage.data?.by_key || {};
 
   const load = async () => {
     const { data } = await api.get("/keys");
@@ -64,6 +67,8 @@ export default function ApiKeys() {
       </div>
 
       {/* Create */}
+      <UsageChart title="Your usage · web + API" usage={usage} testid="user-usage" />
+
       <form onSubmit={create} className="card-brutal p-6 flex gap-3 flex-wrap items-end">
         <div className="flex-1 min-w-[220px]">
           <label className="overline block mb-1">Key name</label>
@@ -106,6 +111,8 @@ export default function ApiKeys() {
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Prefix</th>
                   <th className="px-4 py-3 text-right">Uses</th>
+                  <th className="px-4 py-3 text-right">Tokens saved ({usage.days}d)</th>
+                  <th className="px-4 py-3">Last used</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -118,6 +125,10 @@ export default function ApiKeys() {
                     </td>
                     <td className="px-4 py-3 font-mono text-[#4B5563]">{k.prefix}…</td>
                     <td className="px-4 py-3 text-right tabular-nums">{k.usage_count}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[#002FA7] font-bold" data-testid={`key-saved-${k.id}`}>
+                      {Number(byKey[k.id]?.tokens_saved || 0).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-[#4B5563]">{k.last_used ? new Date(k.last_used).toLocaleString() : "never"}</td>
                     <td className="px-4 py-3">
                       {k.revoked ? (
                         <span className="text-xs font-bold uppercase text-[#FF3B30]">Revoked</span>

@@ -2,7 +2,8 @@ import { useState } from "react";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { toast } from "sonner";
 import { Play, Spinner, Copy, ShieldCheck, Warning } from "@phosphor-icons/react";
-import { EngineOptions, KindBadge, RecordText } from "@/components/EngineOptions";
+import { EngineOptions, KindBadge, RecordText, DEFAULT_OPTS } from "@/components/EngineOptions";
+import { useHotkeys } from "@/lib/hotkeys";
 
 export const SAMPLES = {
   logs: `2026-06-01 10:00:01 INFO user 17 logged in from 10.0.0.17
@@ -46,12 +47,13 @@ function Results({ res }) {
   };
   return (
     <div className="space-y-6" data-testid="playground-results">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
           ["Detected", res.detected_kind],
           ["Fragments", `${fmt(s.fragments_in)} → ${fmt(s.unique_concepts)}`],
           ["Tokens", `${fmt(s.tokens_before)} → ${fmt(s.tokens_after)}`],
           ["Saved", `${s.token_reduction_pct}%`],
+          ["Tables", fmt(s.tables_folded)],
           ["Time", `${s.elapsed_ms} ms`],
         ].map(([k, v]) => (
           <div key={k} className="card-brutal p-4" data-testid={`pg-stat-${k.toLowerCase()}`}>
@@ -117,14 +119,14 @@ function Results({ res }) {
 
 export default function Playground() {
   const [text, setText] = useState(SAMPLES.logs);
-  const [opts, setOpts] = useState({ threshold: 0.82, mode: "auto", guard: "facts", order: "original" });
+  const [opts, setOpts] = useState(DEFAULT_OPTS);
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState(null);
 
   const run = async () => {
     setBusy(true);
     try {
-      const { data } = await api.post("/playground", { text, ...opts });
+      const { data } = await api.post("/playground", { text, ...opts, budget: opts.budget || null });
       setRes(data);
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail) || e.message);
@@ -132,6 +134,8 @@ export default function Playground() {
       setBusy(false);
     }
   };
+
+  useHotkeys({ "mod+enter": () => text.trim() && !busy && run() });
 
   return (
     <div className="space-y-6" data-testid="playground">
@@ -156,7 +160,7 @@ export default function Playground() {
         <EngineOptions opts={opts} setOpts={setOpts} />
         <button onClick={run} disabled={busy || !text.trim()} className="btn-brutal disabled:opacity-50" data-testid="pg-run">
           {busy ? <Spinner size={18} weight="bold" className="animate-spin" /> : <Play size={18} weight="fill" />}
-          Optimize
+          Optimize <span className="opacity-60 text-[10px] ml-1">⌘/Ctrl+Enter</span>
         </button>
       </div>
       {res && <Results res={res} />}

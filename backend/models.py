@@ -74,6 +74,8 @@ class OptimizeTextRequest(BaseModel):
     order: str = "original"
     include_map: bool = False
     format: str = Field(default="text", pattern="^(text|annotated)$")
+    fold_tables: bool = True
+    budget: Optional[int] = Field(default=None, ge=50)
 
 
 class PlaygroundRequest(BaseModel):
@@ -83,3 +85,9 @@ class PlaygroundRequest(BaseModel):
     mode: str = "auto"
     guard: str = "facts"
     order: str = "original"
+    fold_tables: bool = True
+    budget: Optional[int] = Field(default=None, ge=50)
+
+
+class ShareRequest(BaseModel):
+    enabled: bool

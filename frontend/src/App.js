@@ -11,6 +11,8 @@ import JobResult from "@/pages/JobResult";
 import ApiKeys from "@/pages/ApiKeys";
 import Admin from "@/pages/Admin";
 import HowItWorks from "@/pages/HowItWorks";
+import SharedReport from "@/pages/SharedReport";
+import Shortcuts from "@/components/Shortcuts";
 
 function Loading() {
   return (
@@ -45,11 +47,13 @@ function App() {
             },
           }}
         />
+        <Shortcuts />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/r/:token" element={<SharedReport />} />
           <Route path="/app" element={<Protected><Dashboard /></Protected>} />
           <Route path="/app/keys" element={<Protected><ApiKeys /></Protected>} />
           <Route path="/app/jobs/:jobId" element={<Protected><JobResult /></Protected>} />

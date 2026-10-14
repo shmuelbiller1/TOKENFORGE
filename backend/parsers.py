@@ -170,7 +170,8 @@ def _table_rows(rows, n: int) -> List[str]:
             header = cols
             continue
         if header and len(header) >= len(cols):
-            row = " | ".join(f"{h}: {c}" if h else c for h, c in zip(header, cols) if c)
+            row = " | ".join((f"{h}: {c}" if c else f"{h}:") if h else c for h, c in zip(header, cols)
+                             if c or h)
         else:
             row = " | ".join(c for c in cols if c)
         if len(row) >= n:

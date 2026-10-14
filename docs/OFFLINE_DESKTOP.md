@@ -22,10 +22,23 @@ python desktop/build.py
 A build fetches dependencies and preloads the tokenizer encoding. The resulting
 package includes that data, so it can run offline. Build separately on each OS.
 
-For downloadable archives, run the GitHub Desktop packages workflow or create
-a **new** version tag. Only successful tagged workflows publish GitHub Releases assets.
-The source-code tar.gz/zip archives are not desktop applications.
-https://github.com/shmuelbiller1/TOKENFORGE/releases
+**For a normal Windows download**, use the latest complete public release:
+https://github.com/shmuelbiller1/TOKENFORGE/releases/latest
+
+Choose `TokenForge-Setup-Windows-x64.exe` for desktop/Start Menu installation,
+`TokenForge-Portable-Windows-x64.exe` for one standalone file, or
+`TokenForge-Windows-x64.zip` for a portable folder.
+
+Only a release that lists these actual executable assets is a working app
+download. GitHub's automatic "Source code (zip)" and "Source code (tar.gz)"
+files are **not** Windows applications. GitHub Actions artifacts, by contrast,
+are developer build bundles and may require a GitHub sign-in and a second ZIP
+extraction. Normal users should use **Releases**, not **Actions**.
+
+New version tags still build and publish all supported desktop formats. The
+release workflow checks that all platform packages exist, checks the Windows
+ZIP, publishes SHA-256 checksums, and verifies the public release assets.
+The corrected release is v0.3.8; the earlier v0.3.5 publication was empty.
 
 ### What should be inside the portable ZIP?
 
@@ -74,8 +87,7 @@ and macOS notarization are configured.
 
 ## Windows: choose the download that fits you
 
-After the next tagged release (existing v0.3.5 assets do not change),
-the release page will have **three Windows choices**:
+The corrected v0.3.8 release provides **three Windows choices**:
 
 | Download | How to run it | Best use |
 | --- | --- | --- |
@@ -117,4 +129,4 @@ On Linux, the tarball includes `tokenforge.desktop` and `install-user.sh`.
 After extracting, run `sh TokenForge/install-user.sh` to install a per-user
 application-menu launcher. The launcher passes selected files into TokenForge.
 
-Fast-open and installer features are available in the latest published releases. The new single-file USB edition becomes available after its release workflow succeeds on a newer tag. The packages are not yet signed or notarized.
+The installer, portable folder, and single EXE use the same desktop program, including the R&D History window in v0.3.8 and newer. The packages are not yet code-signed or notarized.

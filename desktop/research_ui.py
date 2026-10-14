@@ -179,7 +179,9 @@ class ResearchWindow:
                     f"{len(value['versions'])} versions; "
                     f"{len(value['comparisons'])} chronological comparisons; "
                     f"{value['exact_repetitions']['repeated_extracted_passages']} "
-                    "exact repeated extracted passages. Review evidence before using it.")
+                    "exact repeated extracted passages; "
+                    f"{value['exact_sentence_candidates']['repeated_candidates']} "
+                    "exact sentence candidates. Review evidence before using it.")
         except queue.Empty:
             pass
         self.window.after(100, self.poll)

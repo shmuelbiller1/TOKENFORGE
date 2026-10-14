@@ -75,8 +75,11 @@ class Desktop:
         self.result=None;self.run.configure(state="disabled")
         for btn in [self.save,self.bundle,self.copy]:btn.configure(state="disabled")
         self.status.set("Optimizing locally…")
+        # Read Tk state on the UI thread; workers must not access Tk variables.
+        chosen_files = self.files[:]
+        chosen_guard = self.guard.get()
         def worker():
-            try:self.events.put(("ok",process(self.files[:],t,self.guard.get(),b)))
+            try:self.events.put(("ok",process(chosen_files,t,chosen_guard,b)))
             except Exception as e:self.events.put(("error",str(e)))
         threading.Thread(target=worker,daemon=True).start()
     def poll(self):
@@ -102,5 +105,25 @@ class Desktop:
     def copy_result(self):
         self.root.clipboard_clear();self.root.clipboard_append(self.result["output"]["text"])
 
+def packaged_self_test():
+    """Check the frozen app's parser, tokenizer, and optimizer without launching a GUI."""
+    import tempfile
+    import tiktoken
+    if not hasattr(sys.modules["optimizer"], "_ENC"):
+        raise RuntimeError("Bundled tiktoken encoding is missing")
+    if not (ROOT / "tiktoken_cache").is_dir():
+        raise RuntimeError("Bundled offline tokenizer cache is missing")
+    with tempfile.TemporaryDirectory() as folder:
+        file = Path(folder) / "sample.txt"
+        file.write_text("Order 1 shipped\nOrder 2 shipped\nOrder 1 shipped", encoding="utf-8")
+        result = process([str(file)])
+        assert result["stats"]["lossless_verified"]
+        assert result["output"]["text"]
+        assert tiktoken.get_encoding("cl100k_base") is not None
+
+
 if __name__=="__main__":
-    app=tk.Tk();Desktop(app);app.mainloop()
+    if "--self-test" in sys.argv:
+        packaged_self_test()
+    else:
+        app=tk.Tk();Desktop(app);app.mainloop()

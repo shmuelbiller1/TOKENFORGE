@@ -149,6 +149,14 @@ def packaged_self_test():
 
 if __name__=="__main__":
     if "--self-test" in sys.argv:
-        packaged_self_test()
+        try:
+            packaged_self_test()
+        except BaseException:
+            # Frozen windowed executables have no terminal; preserve actionable CI diagnostics.
+            import traceback
+            report = os.environ.get("TOKENFORGE_SELFTEST_REPORT")
+            if report:
+                Path(report).write_text(traceback.format_exc(), encoding="utf-8")
+            raise
     else:
         app=tk.Tk();Desktop(app);app.mainloop()

@@ -48,6 +48,32 @@ The text output may omit records when a token budget is specified; the bundle
 retains the parsed fragments and map. Archives are unsigned until code signing
 and macOS notarization are configured.
 
+## Windows: choose the download that fits you
+
+After the next tagged release (existing v0.3.5 assets do not change),
+the release page will have **three Windows choices**:
+
+| Download | How to run it | Best use |
+| --- | --- | --- |
+| `TokenForge-Portable-Windows-x64.exe` | Copy this single EXE to a USB drive; double-click it on a Windows x64 PC. No installation or ZIP extraction. | Share one simple file |
+| `TokenForge-Windows-x64.zip` | Extract the complete folder; double-click `TokenForge.exe` inside it. Keep the folder together. | Faster startup |
+| `TokenForge-Setup-Windows-x64.exe` | Install once; launch from Start or use the file right-click action. | Regular use |
+
+The single-file edition is built with PyInstaller one-file mode. It unpacks
+its supporting libraries into a temporary directory during startup and
+removes them after exit. Thus its initial window generally opens more slowly
+than the folder edition. Both run offline and bundle Python and their
+dependencies.
+
+**Public/locked-down computers:** you can download either file to a USB
+drive without running it on the public computer. The recipient's Windows x64
+computer must allow local unsigned applications. USB portability does not
+bypass administrator restrictions. Unsigned downloads may trigger system
+security prompts.
+
+Do not choose GitHub's auto-generated `Source code (zip)` or `Source code
+(tar.gz)` files to run TokenForge: those are for software developers.
+
 ## Fast start and direct file opening (new builds)
 
 The desktop window starts before the heavier Python parser and optimization
@@ -67,5 +93,4 @@ On Linux, the tarball includes `tokenforge.desktop` and `install-user.sh`.
 After extracting, run `sh TokenForge/install-user.sh` to install a per-user
 application-menu launcher. The launcher passes selected files into TokenForge.
 
-These features are in the newer release branch, not the already-published
-v0.3 source-code archive. The installer is not yet code-signed or notarized.
+Fast-open and installer features are available in the latest published releases. The new single-file USB edition becomes available after its release workflow succeeds on a newer tag. The packages are not yet signed or notarized.

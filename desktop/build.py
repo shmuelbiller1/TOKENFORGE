@@ -29,4 +29,8 @@ if code==0 and sys.platform=="darwin":
                                "public.json","public.zip-archive","com.adobe.pdf"]}
     ]
     with info.open("wb") as fp: plistlib.dump(data,fp)
+    # PyInstaller signs macOS bundles before we modify Info.plist. Re-sign the final
+    # modified bundle with an ad-hoc signature (not developer notarization).
+    subprocess.run(["codesign","--force","--deep","--sign","-",
+                    str(root/"desktop"/"dist"/"TokenForge.app")],check=True)
 raise SystemExit(code)

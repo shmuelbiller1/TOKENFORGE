@@ -26,7 +26,7 @@ Every timestamp, user ID and IP is still in the output, and on real logs and exp
 
 ---
 
-**To run TokenForge without programming:** Download the correct application archive from [GitHub Releases](https://github.com/shmuelbiller1/TOKENFORGE/releases), **not** the automatically generated Source code ZIP/tar.gz. See the [offline installation guide](docs/OFFLINE_DESKTOP.md).
+**Windows download:** Open the [latest public release](https://github.com/shmuelbiller1/TOKENFORGE/releases/latest) and choose **TokenForge-Setup-Windows-x64.exe** to install with a desktop icon, or **TokenForge-Portable-Windows-x64.exe** for a single no-install file. Do **not** choose GitHub's automatic Source code ZIP or an Actions build artifact. [Complete download instructions](docs/OFFLINE_DESKTOP.md).
 
 **Offline desktop:** see [download/build instructions](docs/OFFLINE_DESKTOP.md). The desktop app requires no account, database, or cloud connection.
 

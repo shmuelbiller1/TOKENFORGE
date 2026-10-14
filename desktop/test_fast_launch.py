@@ -48,3 +48,18 @@ def test_os_open_files_are_added_once_and_automatically_started(tmp_path):
     assert Desktop.open_paths(d,[str(p)],auto_start=True)==0
     assert d.files==[str(p.resolve())]
     assert d.started==1
+
+def test_both_windows_portable_formats_are_built_and_released():
+    builder = (ROOT / "desktop/build.py").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/desktop-release.yml").read_text(encoding="utf-8")
+    assert "--onefile" in builder
+    assert "sys.platform != \"win32\"" in builder
+    assert "TokenForge-Portable" in builder
+    assert "python desktop/build.py --portable" in workflow
+    assert "desktop/dist/TokenForge-Portable.exe" in workflow
+    assert "TokenForge-Portable-Windows-x64.exe" in workflow
+    assert "TokenForge-Windows-x64.zip" in workflow
+    assert "TokenForge-Setup-Windows-x64.exe" in workflow
+    assert "Single-file offline self-test failed" in workflow
+    assert "Start-Process -FilePath $portable" in workflow
+    assert "-Wait -PassThru" in workflow

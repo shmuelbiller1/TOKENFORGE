@@ -203,8 +203,7 @@ jobs:
               echo "::error::Release $tag missing $file"; exit 1;
             }
           done
-          echo "$names" | grep -E '^TokenForge-macOS-.*\.zip
- || {
+          echo "$names" | grep -E '^TokenForge-macOS-.*[.]zip$' || {
             echo "::error::Release $tag missing macOS"; exit 1;
           }
       - name: Hide superseded empty v0.3.5 release without deleting its tag

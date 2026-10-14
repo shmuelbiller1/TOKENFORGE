@@ -63,3 +63,33 @@ def test_both_windows_portable_formats_are_built_and_released():
     assert "Single-file offline self-test failed" in workflow
     assert "Start-Process -FilePath $portable" in workflow
     assert "-Wait -PassThru" in workflow
+
+
+def test_backend_source_not_copied_into_user_download():
+    builder = (ROOT / "desktop/build.py").read_text(encoding="utf-8")
+    assert '"--add-data",str(root/"backend")' not in builder
+    assert "--contents-directory" in builder
+    assert "tiktoken_cache" in builder
+
+
+def test_release_audit_rejects_source_and_test_files(tmp_path):
+    import pytest
+    from desktop.audit_bundle import audit
+
+    folder = tmp_path / "TokenForge"
+    internal = folder / "_internal"
+    (internal / "tiktoken_cache").mkdir(parents=True)
+    (folder / "TokenForge").write_bytes(b"dummy compiled launcher")
+    audit(folder)
+
+    tests = internal / "backend" / "tests"
+    tests.mkdir(parents=True)
+    (tests / "test_engine.py").write_text("# dev-only test", encoding="utf-8")
+    with pytest.raises(AssertionError, match="Development or server files"):
+        audit(folder)
+
+
+def test_release_workflow_runs_the_package_audit():
+    workflow = (ROOT / ".github/workflows/desktop-release.yml").read_text(encoding="utf-8")
+    assert "python desktop/audit_bundle.py desktop/dist/TokenForge.app" in workflow
+    assert "python desktop/audit_bundle.py desktop/dist/TokenForge" in workflow

@@ -27,6 +27,30 @@ a **new** version tag. Only successful tagged workflows publish GitHub Releases 
 The source-code tar.gz/zip archives are not desktop applications.
 https://github.com/shmuelbiller1/TOKENFORGE/releases
 
+### What should be inside the portable ZIP?
+
+The Windows portable ZIP is deliberately organized as one application folder:
+
+```text
+TokenForge/
+  TokenForge.exe        ← double-click to start
+  _internal/            ← required Python runtime and offline tokenizer data
+```
+
+Do **not** move `TokenForge.exe` away from its `_internal` folder, and do not
+delete the support directory. It contains bundled runtime libraries rather
+than sample documents to be processed.
+
+The download **does not need** the source repository's automated tests,
+example environment settings, backend web server, Docker instructions, or
+deployment files. The release build now excludes those files, and the
+packaging workflow checks for accidental additions before publishing.
+
+If you prefer a single item with no visible support folder, choose
+`TokenForge-Portable-Windows-x64.exe` instead. It is easier to copy to USB,
+although its first launch may be slower because it extracts its internal
+runtime temporarily.
+
 ### Installing an offline release
 
 - **Windows:** Extract `TokenForge-Windows-x64.zip` and open `TokenForge.exe` inside the

@@ -18,12 +18,19 @@ tiktoken.get_encoding("cl100k_base")
 if not list(cache.iterdir()):raise RuntimeError("Tokenizer cache unavailable")
 cmd=[sys.executable,"-m","PyInstaller","--noconfirm","--clean","--windowed",
      "--name","TokenForge-Portable" if portable else "TokenForge","--paths",str(root/"backend"),"--hidden-import","tiktoken_ext.openai_public",
-     "--add-data",str(root/"backend")+os.pathsep+"backend",
+     # Python module analysis bundles optimizer.py and parsers.py automatically.
+     # Do not copy the whole backend source tree: it includes tests, Docker
+     # deployment files, API/server modules and example configurations.
      "--add-data",str(cache)+os.pathsep+"tiktoken_cache",
      "--distpath",str(root/"desktop"/"dist"),"--workpath",str(root/"desktop"/"build"),
      "--specpath",str(root/"desktop"/"build"),str(root/"desktop"/"app.py")]
 if portable:
     cmd.insert(4, "--onefile")
+else:
+    # Put runtime DLLs, Python libraries and tokenizer assets out of sight in
+    # one support directory; the extracted folder has one obvious launcher.
+    cmd.insert(4, "--contents-directory")
+    cmd.insert(5, "_internal")
 if sys.platform=="darwin":
     cmd[3:3]=["--osx-bundle-identifier","com.terranextech.tokenforge"]
 code=subprocess.call(cmd)

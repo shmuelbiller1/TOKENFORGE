@@ -41,6 +41,13 @@ jobs:
             macOS) desktop/dist/TokenForge.app/Contents/MacOS/TokenForge --self-test ;;
             Linux) desktop/dist/TokenForge/TokenForge --self-test ;;
           esac
+      - name: Audit release package for tests and server files
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            macOS) python desktop/audit_bundle.py desktop/dist/TokenForge.app ;;
+            *) python desktop/audit_bundle.py desktop/dist/TokenForge ;;
+          esac
       - name: Check macOS Finder file registration
         if: runner.os == 'macOS'
         shell: bash

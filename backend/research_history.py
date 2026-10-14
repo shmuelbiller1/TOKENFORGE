@@ -109,6 +109,43 @@ def _compare(
                      "changed_groups": len(changes)}
 
 
+def _exact_passage_index(
+    rows_by_version: list[list[tuple[str, int, str]]],
+) -> dict:
+    """Index identical *extracted* passages; never equate paraphrases.
+
+    An occurrence always refers back to its original revision, member/section,
+    and fragment ordinal. Count duplication only in the displayed index; the
+    chronological differences and original files are untouched.
+    """
+    buckets: dict[str, list[dict]] = {}
+    for version, rows in enumerate(rows_by_version, 1):
+        for section, fragment, text in rows:
+            # Exact Unicode-string equality, with no further case folding,
+            # number masking, MinHash, heuristics or semantic equivalence.
+            buckets.setdefault(text, []).append({
+                "revision": version,
+                "section": section,
+                "fragment": fragment,
+            })
+    repeats = [
+        {"text": text, "occurrences": occurrences}
+        for text, occurrences in buckets.items()
+        if len(occurrences) > 1
+    ]
+    return {
+        "scope": (
+            "Identical Unicode strings after document text extraction, not "
+            "byte-identical original files or verified semantic equivalence. "
+            "Formatting removed by parsers is not considered. Changed numbers, "
+            "units, words, capitalization or punctuation are not merged."
+        ),
+        "unique_extracted_passages": len(buckets),
+        "repeated_extracted_passages": len(repeats),
+        "entries": repeats,
+    }
+
+
 def compare_revisions(
     paths: Sequence[str | Path], *,
     project: str = "Research project",
@@ -132,6 +169,7 @@ def compare_revisions(
     comparisons: list[dict] = []
     total_bytes = 0
     prior_rows: list[tuple[str, int, str]] | None = None
+    all_rows: list[list[tuple[str, int, str]]] = []
     for index, (path, note) in enumerate(zip(paths, clean_notes), 1):
         path = Path(path).expanduser()
         if not path.is_file():
@@ -141,6 +179,7 @@ def compare_revisions(
             raise ValueError("Research versions exceed 50 MB combined; split into batches.")
         meta, rows = _load(path, note)
         meta["revision"] = index
+        all_rows.append(rows)
         versions.append(meta)
         if prior_rows is not None:
             changes, counts = _compare(prior_rows, rows)
@@ -166,6 +205,7 @@ def compare_revisions(
         "comparison_scope": SCOPE_NOTICE,
         "versions": versions,
         "comparisons": comparisons,
+        "exact_repetitions": _exact_passage_index(all_rows),
     }
 
 
@@ -184,6 +224,20 @@ def render_history(report: dict) -> str:
         )
         if v["researcher_note"]:
             lines.append(f"     Researcher note: {v['researcher_note']}")
+    repetition = report["exact_repetitions"]
+    lines.extend([
+        "",
+        "EXACT REPEATED EXTRACTED PASSAGES (shared display, original occurrences kept):",
+        repetition["scope"],
+        f"  {repetition['repeated_extracted_passages']} repeated passages; "
+        f"{repetition['unique_extracted_passages']} distinct passages",
+    ])
+    for entry in repetition["entries"]:
+        location = ", ".join(
+            f"v{o['revision']} {o['section']} #{o['fragment']}"
+            for o in entry["occurrences"]
+        )
+        lines.append(f"  {entry['text']}  [appears at: {location}]")
     for comparison in report["comparisons"]:
         st = comparison["stats"]
         lines.extend([

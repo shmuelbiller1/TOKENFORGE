@@ -47,3 +47,25 @@ binary files, images, layout, or formatting. Keep original files as backups.
 The text output may omit records when a token budget is specified; the bundle
 retains the parsed fragments and map. Archives are unsigned until code signing
 and macOS notarization are configured.
+
+## Fast start and direct file opening (new builds)
+
+The desktop window starts before the heavier Python parser and optimization
+libraries are imported. Your first optimization still loads those libraries
+and then processes the data in a worker thread.
+
+On Windows, the new `TokenForge-Setup-Windows-x64.exe` installer creates a
+Start Menu shortcut and adds **Optimize with TokenForge** to File Explorer's
+file context menu (on Windows 11 it may appear under *Show more options*).
+Users can also drop a file onto the executable or its shortcut. TokenForge
+does **not** change the default app for PDF, text or other file formats.
+
+On macOS, the application bundle registers supported files with Finder.
+Use *Open With* or drop a file onto the app's Dock icon.
+
+On Linux, the tarball includes `tokenforge.desktop` and `install-user.sh`.
+After extracting, run `sh TokenForge/install-user.sh` to install a per-user
+application-menu launcher. The launcher passes selected files into TokenForge.
+
+These features are in the newer release branch, not the already-published
+v0.3 source-code archive. The installer is not yet code-signed or notarized.

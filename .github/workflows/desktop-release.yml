@@ -72,7 +72,11 @@ jobs:
       - name: Archive Linux executable with its permissions
         if: runner.os == 'Linux'
         shell: bash
-        run: tar -C desktop/dist -czf TokenForge-Linux-x64.tar.gz TokenForge
+        run: |
+          cp packaging/linux/tokenforge.desktop desktop/dist/TokenForge/
+          cp packaging/linux/install-user.sh desktop/dist/TokenForge/
+          sh -n desktop/dist/TokenForge/install-user.sh
+          tar -C desktop/dist -czf TokenForge-Linux-x64.tar.gz TokenForge
       - uses: actions/upload-artifact@v4
         with:
           name: TokenForge-${{ matrix.label }}

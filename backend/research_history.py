@@ -110,7 +110,7 @@ def _compare(
                      "changed_groups": len(changes)}
 
 
-_SENTENCE_BREAK = re.compile(r"(?<=[.!?。！？])\\s+(?=\\S)")
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?。！？])\s+(?=\S)")
 
 
 def _sentence_segments(fragment: str) -> list[tuple[str, int, int]]:

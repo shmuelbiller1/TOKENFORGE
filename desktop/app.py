@@ -12,12 +12,12 @@ ROOT=Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 if (ROOT/"tiktoken_cache").exists():
     os.environ["TIKTOKEN_CACHE_DIR"]=str(ROOT/"tiktoken_cache")
 sys.path.insert(0,str(ROOT/"backend"))
-from optimizer import optimize_sources
-from parsers import parse_upload
-
+# Import the optimizer lazily in the worker so the window appears first.
 MAX_BYTES=50*1024*1024
 
 def process(paths, threshold=.82, guard="facts", budget=None):
+    from optimizer import optimize_sources
+    from parsers import parse_upload
     sources=[]; total=0
     for filename in paths:
         p=Path(filename); total+=p.stat().st_size
@@ -34,6 +34,8 @@ class Desktop:
     def __init__(self,root):
         self.root=root; self.files=[]; self.result=None; self.events=queue.Queue()
         root.title("TokenForge — Offline"); root.geometry("900x650")
+        if sys.platform == "darwin":
+            root.createcommand("::tk::mac::OpenDocument", self.open_mac_documents)
         box=ttk.Frame(root,padding=16);box.pack(fill="both",expand=True)
         ttk.Label(box,text="TokenForge · Offline",font=("Arial",20,"bold")).pack(anchor="w")
         ttk.Label(box,text="Files stay on this computer. No login or internet required.").pack(anchor="w",pady=(0,10))
@@ -61,9 +63,32 @@ class Desktop:
         self.text=tk.Text(box,wrap="none");self.text.pack(fill="both",expand=True,pady=8)
         self.text.configure(state="disabled")
         root.after(100,self.poll)
+        initial=[arg for arg in sys.argv[1:] if not arg.startswith("-psn_")]
+        if initial:
+            root.after(50,lambda: self.open_paths(initial,auto_start=True))
+    def open_paths(self, paths, auto_start=False):
+        added=0
+        for raw in paths:
+            path=Path(raw).expanduser()
+            if not path.is_file():
+                self.status.set("A selected path is not a readable file: "+str(raw))
+                continue
+            normalized=str(path.resolve())
+            if normalized not in self.files:
+                self.files.append(normalized)
+                self.list.insert("end",normalized)
+                added+=1
+        if auto_start and added and self.run.cget("state")!="disabled":
+            self.start()
+        elif added:
+            self.status.set(str(len(self.files))+" files ready")
+        return added
+
+    def open_mac_documents(self,*paths):
+        self.open_paths(paths,auto_start=True)
+
     def add(self):
-        for p in filedialog.askopenfilenames():
-            if p not in self.files:self.files.append(p);self.list.insert("end",p)
+        self.open_paths(filedialog.askopenfilenames())
     def clear(self):
         self.files=[];self.list.delete(0,"end")
     def start(self):
@@ -109,14 +134,14 @@ def packaged_self_test():
     """Check the frozen app's parser, tokenizer, and optimizer without launching a GUI."""
     import tempfile
     import tiktoken
-    if not hasattr(sys.modules["optimizer"], "_ENC"):
-        raise RuntimeError("Bundled tiktoken encoding is missing")
     if not (ROOT / "tiktoken_cache").is_dir():
         raise RuntimeError("Bundled offline tokenizer cache is missing")
     with tempfile.TemporaryDirectory() as folder:
         file = Path(folder) / "sample.txt"
         file.write_text("Order 1 shipped\nOrder 2 shipped\nOrder 1 shipped", encoding="utf-8")
         result = process([str(file)])
+        if not hasattr(sys.modules["optimizer"], "_ENC"):
+            raise RuntimeError("Bundled tiktoken encoding is missing")
         assert result["stats"]["lossless_verified"]
         assert result["output"]["text"]
         assert tiktoken.get_encoding("cl100k_base") is not None

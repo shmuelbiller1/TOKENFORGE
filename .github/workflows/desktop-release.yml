@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'desktop/**'
+      - 'packaging/**'
       - 'backend/**'
       - '.github/workflows/desktop-release.yml'
   push:
@@ -22,7 +23,7 @@ jobs:
             label: macOS
           - os: ubuntu-latest
             label: Linux
-    runs-on: \${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,7 +36,7 @@ jobs:
       - name: Smoke-test frozen executable before upload
         shell: bash
         run: |
-          case "\${{ runner.os }}" in
+          case "${{ runner.os }}" in
             Windows) desktop/dist/TokenForge/TokenForge.exe --self-test ;;
             macOS) desktop/dist/TokenForge.app/Contents/MacOS/TokenForge --self-test ;;
             Linux) desktop/dist/TokenForge/TokenForge --self-test ;;
@@ -50,14 +51,14 @@ jobs:
         run: |
           test -d desktop/dist/TokenForge.app
           arch=$(uname -m)
-          ditto -c -k --sequesterRsrc --keepParent desktop/dist/TokenForge.app "TokenForge-macOS-\${arch}.zip"
+          ditto -c -k --sequesterRsrc --keepParent desktop/dist/TokenForge.app "TokenForge-macOS-${arch}.zip"
       - name: Archive Linux executable with its permissions
         if: runner.os == 'Linux'
         shell: bash
         run: tar -C desktop/dist -czf TokenForge-Linux-x64.tar.gz TokenForge
       - uses: actions/upload-artifact@v4
         with:
-          name: TokenForge-\${{ matrix.label }}
+          name: TokenForge-${{ matrix.label }}
           path: |
             TokenForge-*.zip
             TokenForge-*.tar.gz

@@ -129,3 +129,44 @@ def test_empty_and_unreadable_files_fail_clearly(tmp_path):
     unknown.write_bytes(b"\x00\x01\x02some binary content")
     with pytest.raises(ValueError, match="not supported"):
         compare_revisions([valid, unknown])
+
+
+def test_exact_repeated_passages_merge_only_display_and_keep_each_location(tmp_path):
+    a = tmp_path / "r1.txt"
+    b = tmp_path / "r2.txt"
+    c = tmp_path / "r3.txt"
+    a.write_text("Hold time: 10 microseconds\nKeep this method\n", encoding="utf-8")
+    b.write_text("Hold time: 20 microseconds\nKeep this method\n", encoding="utf-8")
+    c.write_text("Hold time: 10 microseconds\nKeep this method\n", encoding="utf-8")
+    report = compare_revisions([a, b, c])
+    entries = report["exact_repetitions"]["entries"]
+    by_text = {entry["text"]: entry["occurrences"] for entry in entries}
+    # Exact text repeats in non-adjacent versions and remains traceable.
+    assert [x["revision"] for x in by_text["Hold time: 10 microseconds"]] == [1, 3]
+    assert [x["revision"] for x in by_text["Keep this method"]] == [1, 2, 3]
+    assert "Hold time: 20 microseconds" not in by_text
+    assert report["comparisons"][0]["text_fragments_changed"]
+    assert report["comparisons"][1]["text_fragments_changed"]
+
+
+def test_near_matches_cannot_be_marked_exact(tmp_path):
+    a = tmp_path / "a.txt"
+    b = tmp_path / "b.txt"
+    a.write_text("Result: 10 keV\nWarning: possible\n", encoding="utf-8")
+    b.write_text("Result: 10 MeV\nwarning: possible\n", encoding="utf-8")
+    index = compare_revisions([a, b])["exact_repetitions"]
+    assert index["repeated_extracted_passages"] == 0
+    assert index["unique_extracted_passages"] == 4
+
+
+def test_same_version_multiple_occurrences_are_all_retained(tmp_path):
+    a = tmp_path / "a.txt"
+    b = tmp_path / "b.txt"
+    a.write_text("Exactly repeated line\nExactly repeated line\n", encoding="utf-8")
+    b.write_text("Completely different text\n", encoding="utf-8")
+    entries = compare_revisions([a, b])["exact_repetitions"]["entries"]
+    assert len(entries) == 1
+    assert entries[0]["occurrences"] == [
+        {"revision": 1, "section": "document", "fragment": 1},
+        {"revision": 1, "section": "document", "fragment": 2},
+    ]

@@ -85,9 +85,8 @@ overlapping batches and keep the exported JSON for audit.
 
 ## Data-handling precaution
 
-This feature is for research you have permission to examine. It operates
-locally and does **not** upload research material to the public TerranexTech
-website or to GitHub. A public project description is not a substitute for
+This feature is for research you have permission to examine.
+A public project description is not a substitute for
 your private R&D records. Back up your original files, and verify sensitive
 scientific statements directly against the source documents.
 
